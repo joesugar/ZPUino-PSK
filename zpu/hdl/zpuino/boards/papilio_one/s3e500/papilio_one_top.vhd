@@ -112,23 +112,23 @@ architecture behave of papilio_one_top is
     "1111111111111111";
 
   -- I/O Signals
-  signal slot_cyc:   slot_std_logic_type;
-  signal slot_we:    slot_std_logic_type;
-  signal slot_stb:   slot_std_logic_type;
-  signal slot_read:  slot_cpuword_type;
+  signal slot_cyc: slot_std_logic_type;
+  signal slot_we: slot_std_logic_type;
+  signal slot_stb: slot_std_logic_type;
+  signal slot_read: slot_cpuword_type;
   signal slot_write: slot_cpuword_type;
-  signal slot_address:  slot_address_type;
-  signal slot_ack:   slot_std_logic_type;
+  signal slot_address: slot_address_type;
+  signal slot_ack: slot_std_logic_type;
   signal slot_interrupt: slot_std_logic_type;
 
-  signal spi_enabled:  std_logic;
+  signal spi_enabled: std_logic;
 
-  signal spi2_enabled:  std_logic;
-  signal spi2_mosi:  std_logic;
-  signal spi2_miso:  std_logic;
-  signal spi2_sck:  std_logic;
+  signal spi2_enabled: std_logic;
+  signal spi2_mosi: std_logic;
+  signal spi2_miso: std_logic;
+  signal spi2_sck: std_logic;
 
-  signal uart_enabled:  std_logic;
+  signal uart_enabled: std_logic;
 
   -- SPP signal is one more than GPIO count
   signal gpio_spp_data: std_logic_vector(zpuino_gpio_count-1 downto 0);
@@ -136,7 +136,7 @@ architecture behave of papilio_one_top is
 
   --signal gpio_spp_en: std_logic_vector(zpuino_gpio_count-1 downto 1);
 
-  signal timers_interrupt:  std_logic_vector(1 downto 0);
+  signal timers_interrupt: std_logic_vector(1 downto 0);
   signal timers_pwm: std_logic_vector(1 downto 0);
 
   signal ivecs: std_logic_vector(17 downto 0);
@@ -426,8 +426,8 @@ begin
     wb_inta_o => slot_interrupt(3), -- We use two interrupt lines
     wb_intb_o => slot_interrupt(4), -- so we borrow intr line from slot 4
 
-    pwm_a_out   => timers_pwm(0 downto 0),
-    pwm_b_out   => timers_pwm(1 downto 1)
+    pwm_a_out => timers_pwm(0 downto 0),
+    pwm_b_out => timers_pwm(1 downto 1)
   );
 
   --
@@ -460,7 +460,7 @@ begin
   -- IO SLOT 6
   --
 
-  slot1: zpuino_spi
+  slot6: zpuino_spi
   port map (
     wb_clk_i  => wb_clk_i,
 	 	wb_rst_i  => wb_rst_i,
@@ -523,15 +523,15 @@ begin
 
   slot9: zpuino_empty_device
   port map (
-    wb_clk_i       => wb_clk_i,
-	 	wb_rst_i       => wb_rst_i,
-    wb_dat_o      => slot_read(9),
-    wb_dat_i     => slot_write(9),
-    wb_adr_i   => slot_address(9),
-    wb_we_i        => slot_we(9),
-    wb_cyc_i        => slot_cyc(9),
-    wb_stb_i        => slot_stb(9),
-    wb_ack_o      => slot_ack(9),
+    wb_clk_i  => wb_clk_i,
+	 	wb_rst_i  => wb_rst_i,
+    wb_dat_o  => slot_read(9),
+    wb_dat_i  => slot_write(9),
+    wb_adr_i  => slot_address(9),
+    wb_we_i   => slot_we(9),
+    wb_cyc_i  => slot_cyc(9),
+    wb_stb_i  => slot_stb(9),
+    wb_ack_o  => slot_ack(9),
     wb_inta_o => slot_interrupt(9)
   );
 
@@ -541,15 +541,15 @@ begin
 
   slot10: zpuino_empty_device
   port map (
-    wb_clk_i       => wb_clk_i,
-	 	wb_rst_i       => wb_rst_i,
-    wb_dat_o      => slot_read(10),
-    wb_dat_i     => slot_write(10),
-    wb_adr_i   => slot_address(10),
-    wb_we_i        => slot_we(10),
-    wb_cyc_i        => slot_cyc(10),
-    wb_stb_i        => slot_stb(10),
-    wb_ack_o      => slot_ack(10),
+    wb_clk_i  => wb_clk_i,
+	 	wb_rst_i  => wb_rst_i,
+    wb_dat_o  => slot_read(10),
+    wb_dat_i  => slot_write(10),
+    wb_adr_i  => slot_address(10),
+    wb_we_i   => slot_we(10),
+    wb_cyc_i  => slot_cyc(10),
+    wb_stb_i  => slot_stb(10),
+    wb_ack_o  => slot_ack(10),
     wb_inta_o => slot_interrupt(10)
   );
 
@@ -562,15 +562,15 @@ begin
     bits => 4
   )
   port map (
-    wb_clk_i       => wb_clk_i,
-	 	wb_rst_i    => wb_rst_i,
-    wb_dat_o      => slot_read(11),
-    wb_dat_i     => slot_write(11),
-    wb_adr_i   => slot_address(11),
-    wb_we_i      => slot_we(11),
-    wb_cyc_i       => slot_cyc(11),
-    wb_stb_i       => slot_stb(11),
-    wb_ack_o      => slot_ack(11),
+    wb_clk_i  => wb_clk_i,
+	 	wb_rst_i  => wb_rst_i,
+    wb_dat_o  => slot_read(11),
+    wb_dat_i  => slot_write(11),
+    wb_adr_i  => slot_address(11),
+    wb_we_i   => slot_we(11),
+    wb_cyc_i  => slot_cyc(11),
+    wb_stb_i  => slot_stb(11),
+    wb_ack_o  => slot_ack(11),
 
     wb_inta_o => slot_interrupt(11),
 
@@ -584,15 +584,15 @@ begin
 
   slot12: zpuino_empty_device
   port map (
-    wb_clk_i       => wb_clk_i,
-	 	wb_rst_i       => wb_rst_i,
-    wb_dat_o      => slot_read(12),
-    wb_dat_i     => slot_write(12),
-    wb_adr_i   => slot_address(12),
-    wb_we_i        => slot_we(12),
-    wb_cyc_i        => slot_cyc(12),
-    wb_stb_i        => slot_stb(12),
-    wb_ack_o      => slot_ack(12),
+    wb_clk_i  => wb_clk_i,
+	 	wb_rst_i  => wb_rst_i,
+    wb_dat_o  => slot_read(12),
+    wb_dat_i  => slot_write(12),
+    wb_adr_i  => slot_address(12),
+    wb_we_i   => slot_we(12),
+    wb_cyc_i  => slot_cyc(12),
+    wb_stb_i  => slot_stb(12),
+    wb_ack_o  => slot_ack(12),
     wb_inta_o => slot_interrupt(12)
   );
 
@@ -602,15 +602,15 @@ begin
 
   slot13: zpuino_empty_device
   port map (
-    wb_clk_i       => wb_clk_i,
-	 	wb_rst_i       => wb_rst_i,
-    wb_dat_o      => slot_read(13),
-    wb_dat_i     => slot_write(13),
-    wb_adr_i   => slot_address(13),
-    wb_we_i        => slot_we(13),
-    wb_cyc_i        => slot_cyc(13),
-    wb_stb_i        => slot_stb(13),
-    wb_ack_o      => slot_ack(13),
+    wb_clk_i  => wb_clk_i,
+	 	wb_rst_i  => wb_rst_i,
+    wb_dat_o  => slot_read(13),
+    wb_dat_i  => slot_write(13),
+    wb_adr_i  => slot_address(13),
+    wb_we_i   => slot_we(13),
+    wb_cyc_i  => slot_cyc(13),
+    wb_stb_i  => slot_stb(13),
+    wb_ack_o  => slot_ack(13),
     wb_inta_o => slot_interrupt(13)
   );
 
@@ -620,15 +620,15 @@ begin
 
   slot14: zpuino_empty_device
   port map (
-    wb_clk_i       => wb_clk_i,
-	 	wb_rst_i       => wb_rst_i,
-    wb_dat_o      => slot_read(14),
-    wb_dat_i     => slot_write(14),
-    wb_adr_i   => slot_address(14),
-    wb_we_i        => slot_we(14),
-    wb_cyc_i        => slot_cyc(14),
-    wb_stb_i        => slot_stb(14),
-    wb_ack_o      => slot_ack(14),
+    wb_clk_i  => wb_clk_i,
+	 	wb_rst_i  => wb_rst_i,
+    wb_dat_o  => slot_read(14),
+    wb_dat_i  => slot_write(14),
+    wb_adr_i  => slot_address(14),
+    wb_we_i   => slot_we(14),
+    wb_cyc_i  => slot_cyc(14),
+    wb_stb_i  => slot_stb(14),
+    wb_ack_o  => slot_ack(14),
     wb_inta_o => slot_interrupt(14)
   );
 
@@ -638,15 +638,15 @@ begin
 
   slot15: zpuino_empty_device
   port map (
-    wb_clk_i       => wb_clk_i,
-	 	wb_rst_i       => wb_rst_i,
-    wb_dat_o      => slot_read(15),
-    wb_dat_i     => slot_write(15),
-    wb_adr_i   => slot_address(15),
-    wb_we_i        => slot_we(15),
-    wb_cyc_i        => slot_cyc(15),
-    wb_stb_i        => slot_stb(15),
-    wb_ack_o      => slot_ack(15),
+    wb_clk_i  => wb_clk_i,
+	 	wb_rst_i  => wb_rst_i,
+    wb_dat_o  => slot_read(15),
+    wb_dat_i  => slot_write(15),
+    wb_adr_i  => slot_address(15),
+    wb_we_i   => slot_we(15),
+    wb_cyc_i  => slot_cyc(15),
+    wb_stb_i  => slot_stb(15),
+    wb_ack_o  => slot_ack(15),
     wb_inta_o => slot_interrupt(15)
   );
 
@@ -736,6 +736,4 @@ begin
     uart2_rx  <= gpio_spp_read(1);              -- PPS1 : UART2 DATA RECEIVE
 
   end process;
-
-
 end behave;
