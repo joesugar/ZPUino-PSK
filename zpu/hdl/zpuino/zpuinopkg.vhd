@@ -697,5 +697,28 @@ package zpuinopkg is
     rstout:   out std_logic
   );
   end component zpuino_serialreset;  
+  
+  component zpuino_psk is
+  generic(
+    pskwidth: integer := 8
+  );
+  port (
+    -- Wishbone signals.
+    -- ZPUino has a 32 bit word size.
+    wb_clk_i: in std_logic;     -- FPGA clock signal
+    wb_rst_i: in std_logic;     -- reset signal
+    wb_dat_o: out std_logic_vector(wordSize-1 downto 0);      -- data out signal
+    wb_dat_i: in std_logic_vector(wordSize-1 downto 0);       -- data in signal
+    wb_adr_i: in std_logic_vector(maxIObit downto minIObit);  -- read/write address
+    wb_we_i:  in std_logic;     -- write enable
+    wb_cyc_i: in std_logic;
+    wb_stb_i: in std_logic;
+    wb_ack_o: out std_logic;
+    wb_inta_o:out std_logic;
+
+    -- PSK outgoing signal.
+    tx:       out std_logic_vector(pskwidth-1 downto 0)
+    );
+  end component zpuino_psk;  
 
 end package zpuinopkg;

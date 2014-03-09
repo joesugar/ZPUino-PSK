@@ -128,6 +128,8 @@ architecture behave of papilio_one_top is
   signal spi2_miso: std_logic;
   signal spi2_sck: std_logic;
 
+  signal psk_tx: std_logic_vector(7 downto 0);
+  
   signal uart_enabled: std_logic;
 
   -- SPP signal is one more than GPIO count
@@ -479,8 +481,6 @@ begin
     enabled   => open
   );
 
-
-
   --
   -- IO SLOT 7
   --
@@ -503,7 +503,7 @@ begin
   -- IO SLOT 8 (optional)
   --
 
-  adc_inst: zpuino_empty_device
+  psk_inst: zpuino_psk
   port map (
     wb_clk_i  => wb_clk_i,
 	 	wb_rst_i  => wb_rst_i,
@@ -514,7 +514,10 @@ begin
     wb_cyc_i  => slot_cyc(8),
     wb_stb_i  => slot_stb(8),
     wb_ack_o  => slot_ack(8),
-    wb_inta_o =>  slot_interrupt(8)
+    wb_inta_o => slot_interrupt(8),
+    
+    -- PSK transmit vector (7 downto 0)
+    tx        => psk_tx
   );
 
   --
@@ -717,23 +720,28 @@ begin
   process(gpio_spp_read,
           sigmadelta_spp_data,
           timers_pwm,
-          spi2_mosi,spi2_sck)
+          spi2_mosi,spi2_sck,
+          psk_tx)
   begin
 
     gpio_spp_data <= (others => DontCareValue);
 
     -- GPIO output pins
-    gpio_spp_data(0) <= sigmadelta_spp_data(0); -- PPS0 : SIGMADELTA DATA
-    gpio_spp_data(1) <= timers_pwm(0);          -- PPS1 : TIMER0
-    gpio_spp_data(2) <= timers_pwm(1);          -- PPS2 : TIMER1
-    gpio_spp_data(3) <= spi2_mosi;              -- PPS3 : USPI MOSI
-    gpio_spp_data(4) <= spi2_sck;               -- PPS4 : USPI SCK
-    gpio_spp_data(5) <= sigmadelta_spp_data(1); -- PPS5 : SIGMADELTA1 DATA
-    gpio_spp_data(6) <= uart2_tx;               -- PPS6 : UART2 DATA TRANSMIT
+    gpio_spp_data(0)  <= sigmadelta_spp_data(0);  -- PPS0 : SIGMADELTA DATA
+    gpio_spp_data(1)  <= timers_pwm(0);           -- PPS1 : TIMER0
+    gpio_spp_data(2)  <= timers_pwm(1);           -- PPS2 : TIMER1
+    gpio_spp_data(3)  <= spi2_mosi;               -- PPS3 : USPI MOSI
+    gpio_spp_data(4)  <= spi2_sck;                -- PPS4 : USPI SCK
+    gpio_spp_data(5)  <= sigmadelta_spp_data(1);  -- PPS5 : SIGMADELTA1 DATA
+    gpio_spp_data(6)  <= uart2_tx;                -- PPS6 : UART2 DATA TRANSMIT
+    gpio_spp_data(7)  <= psk_tx(4);               -- PPS7 : BIT7 of PSK TX
+    gpio_spp_data(8)  <= psk_tx(5);               -- PPS8 : BIT6 of PSK TX
+    gpio_spp_data(9)  <= psk_tx(6);               -- PPS9 : BIT5 of PSK TX
+    gpio_spp_data(10) <= psk_tx(7);               -- PPS10: BIT4 of PSK TX
     
     -- GPIO input pins
-    spi2_miso <= gpio_spp_read(0);              -- PPS0 : USPI MISO
-    uart2_rx  <= gpio_spp_read(1);              -- PPS1 : UART2 DATA RECEIVE
+    spi2_miso <= gpio_spp_read(0);                -- PPS0 : USPI MISO
+    uart2_rx  <= gpio_spp_read(1);                -- PPS1 : UART2 DATA RECEIVE
 
   end process;
 end behave;

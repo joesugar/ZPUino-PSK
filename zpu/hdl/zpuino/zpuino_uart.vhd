@@ -47,7 +47,7 @@ entity zpuino_uart is
   );
   port (
     wb_clk_i: in std_logic;
-	 	wb_rst_i: in std_logic;
+    wb_rst_i: in std_logic;
     wb_dat_o: out std_logic_vector(wordSize-1 downto 0);
     wb_dat_i: in std_logic_vector(wordSize-1 downto 0);
     wb_adr_i: in std_logic_vector(maxIObit downto minIObit);
