@@ -65,21 +65,55 @@ entity zpuino_psk is
 end entity zpuino_psk;
 
 architecture behave of zpuino_psk is
-
-  signal psk_dat_o : std_logic_vector(pskwidth - 1 downto 0);  -- psk output signal
+  -- 
+  -- Define the ROM used to hold the NCO values.
+  --
+  component zpuino_psk_rom is
+    port (
+      addr_i    : in  std_logic_vector(7 downto 0); -- 8 bits wide
+      data_o    : out signed(7 downto 0)            -- 8 bits wide
+  );
+  end component zpuino_psk_rom;
+  
+  signal psk_dat_o : std_logic_vector(pskwidth - 1 downto 0); -- psk output signal
+  signal rom_addr_i : std_logic_vector(7 downto 0);           -- psk rom address
+  signal psk_rom_o : signed(7 downto 0);                      -- rom output
 
 begin
-
+  --
+  -- Declare component instances.
+  --
+  -- Instance of the NCO rom.
+  --
+  psk_rom: zpuino_psk_rom
+    port map (
+      addr_i  => rom_addr_i,
+      data_o  => psk_rom_o
+    );
+    
+  --
+  -- Start the actual code here.
+  --
   -- Acknowledge all tranfers 
+  --
   wb_ack_o <= wb_stb_i and wb_cyc_i; 
   
+  -- 
   -- Tie interrupt to '0', we never interrupt 
+  --
   wb_inta_o <= '0';
 
+  -- 
   -- Outgoing signals
+  -- Data out is taken from the upper bits of the rom data.
+  --
+  psk_dat_o(pskwidth - 1 downto 0) <= 
+    std_logic_vector(psk_rom_o(7 downto 7 - pskwidth + 1));
   tx <= psk_dat_o;    -- Direct connection.
   
-  -- Process to take the incoming data and write it out to the FPGA pins.
+  --
+  -- Process to set the rom address.
+  --
   process(wb_clk_i)
   begin
     --
@@ -92,17 +126,16 @@ begin
       --
       if wb_rst_i = '1' then
         --
-        -- Reset is enabled so set output to 0.
+        -- Reset is enabled so set the rom address to 0.
         --
-        psk_dat_o <= (others => '0');
+        rom_addr_i <= (others => '0');
     
       elsif wb_cyc_i = '1' and wb_stb_i = '1' and wb_we_i = '1' then
         --
-        -- Copy the data to the output register.
+        -- Load the rom address form the incoming data.
         --
-        psk_dat_o <= (others => '0');
-        psk_dat_o(pskwidth - 1 downto 0) <= wb_dat_i(pskwidth - 1 downto 0);
-    
+        rom_addr_i <= wb_dat_i(7 downto 0);
+      
       end if;
     end if;
   end process;
