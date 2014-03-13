@@ -8,15 +8,16 @@ use ieee.math_real.all;
 --
 entity zpuino_psk_rom_acc is
   generic (
-    N_LO: integer := 16;      -- number of lo acc bits
+    N_LO: integer := 24;      -- number of lo acc bits
     N_HI: integer := 8;       -- number of hi acc bits
-    M_LO: integer := 65536;   -- lo acc modulus - 2**16
+    M_LO: integer := 16777216;-- lo acc modulus - 2**16
     M_HI: integer := 256      -- hi acc modulus - 2**8
   );              
   port (
     clk:    in  std_logic;
     reset:  in  std_logic;
-    inc:    in  std_logic_vector(N_LO-1 downto 0);
+    inc_hi: in  std_logic_vector(N_HI-1 downto 0);
+    inc_lo: in  std_logic_vector(N_LO-1 downto 0);
     carry:  out std_logic;
     q:      out std_logic_vector(N_HI-1 downto 0)
   );
@@ -71,7 +72,7 @@ begin
     --
     -- Calculate next value.
     --
-    temp_lo := ('0' & r_reg_lo) + unsigned('0' & inc);
+    temp_lo := ('0' & r_reg_lo) + unsigned('0' & inc_lo);
     temp_hi := ('0' & r_reg_hi);
     
     --
@@ -95,6 +96,7 @@ begin
     --
     -- Upper register.
     --
+    temp_hi := temp_hi + unsigned('0' & inc_hi);
     if (temp_hi > M_HI-1) then
       --
       -- If value exceeds the modules then set the carry and wrap around.
