@@ -75,9 +75,22 @@ architecture behave of zpuino_psk is
   );
   end component zpuino_psk_rom;
   
-  signal psk_dat_o : std_logic_vector(pskwidth - 1 downto 0); -- psk output signal
-  signal rom_addr_i : std_logic_vector(7 downto 0);           -- psk rom address
-  signal psk_rom_o : signed(7 downto 0);                      -- rom output
+  --
+  -- Define the accumulator associated with the NCO
+  --
+  component zpuino_psk_rom_acc is
+    port (
+      clk:    in  std_logic;
+      reset:  in  std_logic;
+      carry:  out std_logic;
+      q:      out std_logic_vector(23 downto 0)
+  );
+  end component zpuino_psk_rom_acc;
+  
+  signal psk_dat_o  : std_logic_vector(pskwidth - 1 downto 0); -- psk output signal
+  signal psk_rom_addr_i : std_logic_vector(7 downto 0);        -- psk rom address
+  signal psk_rom_o  : signed(7 downto 0);                      -- rom output
+  signal acc_reg_o  : std_logic_vector(23 downto 0);           -- register to hold accumulator value
 
 begin
   --
@@ -86,11 +99,22 @@ begin
   -- Instance of the NCO rom.
   --
   psk_rom: zpuino_psk_rom
-    port map (
-      addr_i  => rom_addr_i,
-      data_o  => psk_rom_o
-    );
+  port map (
+    addr_i  => psk_rom_addr_i,      -- 7 downto 0
+    data_o  => psk_rom_o            -- 7 downto 0
+  );
     
+  --
+  -- Instance of the NCO accumulator
+  --
+  psk_rom_acc: zpuino_psk_rom_acc
+  port map (
+    clk   => wb_clk_i,              -- wishbone clock signal
+    reset => wb_rst_i,              -- wishbone reset signal
+    carry => open,
+    q     => acc_reg_o              -- 23 downto 0
+  );
+  
   --
   -- Start the actual code here.
   --
@@ -102,41 +126,19 @@ begin
   -- Tie interrupt to '0', we never interrupt 
   --
   wb_inta_o <= '0';
-
+  
+  --
+  -- Connect accumulator register output to the ROM address lines.
+  --
+  psk_rom_addr_i <= acc_reg_o(23 downto 16);
+  
   -- 
   -- Outgoing signals
   -- Data out is taken from the upper bits of the rom data.
   --
   psk_dat_o(pskwidth - 1 downto 0) <= 
     std_logic_vector(psk_rom_o(7 downto 7 - pskwidth + 1));
-  tx <= psk_dat_o;    -- Direct connection.
+  --psk_dat_o(pskwidth - 1 downto 0) <= acc_reg_o(23 downto 23 - pskwidth + 1);
+  tx <= psk_dat_o;
   
-  --
-  -- Process to set the rom address.
-  --
-  process(wb_clk_i)
-  begin
-    --
-    -- On the rising edge of the clock...
-    ---
-    if rising_edge(wb_clk_i) then
-      --
-      -- If the reset is enabled reset the block
-      -- Otherwise process incoming data.
-      --
-      if wb_rst_i = '1' then
-        --
-        -- Reset is enabled so set the rom address to 0.
-        --
-        rom_addr_i <= (others => '0');
-    
-      elsif wb_cyc_i = '1' and wb_stb_i = '1' and wb_we_i = '1' then
-        --
-        -- Load the rom address form the incoming data.
-        --
-        rom_addr_i <= wb_dat_i(7 downto 0);
-      
-      end if;
-    end if;
-  end process;
 end behave;

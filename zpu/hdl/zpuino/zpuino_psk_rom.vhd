@@ -25,7 +25,7 @@ architecture rtl of zpuino_psk_rom is
   -- Defined constants.
   -- Memory has 250 8-bit signed values.
   --
-  constant MEM_DEPTH : integer := 250;
+  constant MEM_DEPTH : integer := 2**DATA_WIDTH;
   type mem_type is array (0 to MEM_DEPTH - 1) of signed(DATA_WIDTH - 1 downto 0);
 
   --
