@@ -82,17 +82,17 @@ architecture behave of zpuino_psk is
     port (
       clk:    in  std_logic;
       reset:  in  std_logic;
-      inc:    in  std_logic_vector(23 downto 0);
+      inc:    in  std_logic_vector(15 downto 0);
       carry:  out std_logic;
-      q:      out std_logic_vector(23 downto 0)
+      q:      out std_logic_vector(7 downto 0)
   );
   end component zpuino_psk_rom_acc;
   
   signal psk_dat_o  : std_logic_vector(pskwidth - 1 downto 0); -- psk output signal
   signal psk_rom_addr_i : std_logic_vector(7 downto 0);        -- psk rom address
   signal psk_rom_o  : signed(7 downto 0);                      -- rom output
-  signal acc_reg_o  : std_logic_vector(23 downto 0);           -- register to hold accumulator value
-  signal acc_inc_i  : std_logic_vector(23 downto 0);           -- accumulator increment.
+  signal acc_reg_o  : std_logic_vector(7 downto 0);            -- register to hold accumulator value
+  signal acc_inc_i  : std_logic_vector(15 downto 0);           -- accumulator increment.
 
 begin
   --
@@ -113,9 +113,9 @@ begin
   port map (
     clk   => wb_clk_i,              -- wishbone clock signal
     reset => wb_rst_i,              -- wishbone reset signal
-    inc   => acc_inc_i,
+    inc   => acc_inc_i,             -- 15 downto 0
     carry => open,
-    q     => acc_reg_o              -- 23 downto 0
+    q     => acc_reg_o              -- 7 downto 0
   );
   
   --
@@ -133,7 +133,7 @@ begin
   --
   -- Connect accumulator register output to the ROM address lines.
   --
-  psk_rom_addr_i <= acc_reg_o(23 downto 16);
+  psk_rom_addr_i <= acc_reg_o;
   
   -- 
   -- Outgoing signals
@@ -162,7 +162,7 @@ begin
         -- 
         -- Store the increment value.
         --
-        acc_inc_i <= wb_dat_i(23 downto 0);
+        acc_inc_i <= wb_dat_i(15 downto 0);
       end if;
     end if;
   end process;
