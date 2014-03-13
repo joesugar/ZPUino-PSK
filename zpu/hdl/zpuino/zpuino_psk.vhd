@@ -82,6 +82,7 @@ architecture behave of zpuino_psk is
     port (
       clk:    in  std_logic;
       reset:  in  std_logic;
+      inc:    in  std_logic_vector(23 downto 0);
       carry:  out std_logic;
       q:      out std_logic_vector(23 downto 0)
   );
@@ -91,6 +92,7 @@ architecture behave of zpuino_psk is
   signal psk_rom_addr_i : std_logic_vector(7 downto 0);        -- psk rom address
   signal psk_rom_o  : signed(7 downto 0);                      -- rom output
   signal acc_reg_o  : std_logic_vector(23 downto 0);           -- register to hold accumulator value
+  signal acc_inc_i  : std_logic_vector(23 downto 0);           -- accumulator increment.
 
 begin
   --
@@ -111,6 +113,7 @@ begin
   port map (
     clk   => wb_clk_i,              -- wishbone clock signal
     reset => wb_rst_i,              -- wishbone reset signal
+    inc   => acc_inc_i,
     carry => open,
     q     => acc_reg_o              -- 23 downto 0
   );
@@ -138,7 +141,30 @@ begin
   --
   psk_dat_o(pskwidth - 1 downto 0) <= 
     std_logic_vector(psk_rom_o(7 downto 7 - pskwidth + 1));
-  --psk_dat_o(pskwidth - 1 downto 0) <= acc_reg_o(23 downto 23 - pskwidth + 1);
   tx <= psk_dat_o;
+  
+  --
+  -- Processing loop.
+  --
+  process(wb_clk_i, wb_rst_i)
+  begin
+    if (wb_rst_i = '1') then
+      --
+      -- Reset signal is set.
+      --
+      acc_inc_i <= (others => '0');
+      
+    elsif (rising_edge(wb_clk_i)) then
+      --
+      -- On the rising edge of the clock...
+      ---
+      if (wb_cyc_i='1' and wb_stb_i='1' and wb_we_i='1') then
+        -- 
+        -- Store the increment value.
+        --
+        acc_inc_i <= wb_dat_i(23 downto 0);
+      end if;
+    end if;
+  end process;
   
 end behave;
