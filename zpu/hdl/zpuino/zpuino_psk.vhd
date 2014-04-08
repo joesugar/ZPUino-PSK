@@ -68,12 +68,12 @@ architecture behave of zpuino_psk is
   -- 
   -- Define the ROM used to hold the NCO values.
   --
-  component zpuino_psk_rom is
+  component zpuino_dds_rom is
     port (
       addr_i    : in  std_logic_vector(7 downto 0); -- 8 bits wide
       data_o    : out signed(7 downto 0)            -- 8 bits wide
   );
-  end component zpuino_psk_rom;
+  end component zpuino_dds_rom;
   
   --
   -- Define the accumulator associated with the NCO
@@ -90,8 +90,8 @@ architecture behave of zpuino_psk is
   end component zpuino_psk_rom_acc;
   
   signal psk_dat_o      : std_logic_vector(pskwidth - 1 downto 0);  -- psk output signal
-  signal psk_rom_addr_i : std_logic_vector(7 downto 0);             -- psk rom address
-  signal psk_rom_o      : signed(7 downto 0);                       -- rom output
+  signal dds_rom_addr_i : std_logic_vector(7 downto 0);             -- psk rom address
+  signal dds_rom_o      : signed(7 downto 0);                       -- rom output
   signal acc_reg_o      : std_logic_vector(7 downto 0);             -- register to hold accumulator value
   signal acc_inc_hi_i   : std_logic_vector(7 downto 0);             -- upper accumulator increment.
   signal acc_inc_lo_i   : std_logic_vector(23 downto 0);            -- lower accumulator increment.
@@ -102,10 +102,10 @@ begin
   --
   -- Instance of the NCO rom.
   --
-  psk_rom: zpuino_psk_rom
+  dds_rom: zpuino_dds_rom
   port map (
-    addr_i  => psk_rom_addr_i,      -- 7 downto 0
-    data_o  => psk_rom_o            -- 7 downto 0
+    addr_i  => dds_rom_addr_i,      -- 7 downto 0
+    data_o  => dds_rom_o            -- 7 downto 0
   );
     
   --
@@ -136,14 +136,14 @@ begin
   --
   -- Connect accumulator register output to the ROM address lines.
   --
-  psk_rom_addr_i <= acc_reg_o;
+  dds_rom_addr_i <= acc_reg_o;
   
   -- 
   -- Outgoing signals
   -- Data out is taken from the upper bits of the rom data.
   --
   psk_dat_o(pskwidth - 1 downto 0) <= 
-    std_logic_vector(psk_rom_o(7 downto 7 - pskwidth + 1));
+    std_logic_vector(dds_rom_o(7 downto 7 - pskwidth + 1));
   tx <= psk_dat_o;
   
   --

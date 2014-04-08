@@ -10,7 +10,7 @@ entity zpuino_psk_rom_acc is
   generic (
     N_LO: integer := 24;      -- number of lo acc bits
     N_HI: integer := 8;       -- number of hi acc bits
-    M_LO: integer := 16777216;-- lo acc modulus - 2**16
+    M_LO: integer := 16777216;-- lo acc modulus - 2**24
     M_HI: integer := 256      -- hi acc modulus - 2**8
   );              
   port (
