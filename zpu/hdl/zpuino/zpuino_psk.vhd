@@ -43,7 +43,11 @@ use work.zpuinopkg.all;
 
 entity zpuino_psk is
   generic (
-    pskwidth: integer := 8
+    pskwidth: integer := 8;
+    
+    -- Constants associated with the phase shifter.
+    NUMBER_OF_SHIFTS : integer := 7;
+    IQ_BUS_WIDTH : integer := 8
   );
   port (
     -- Wishbone signals.
@@ -65,6 +69,20 @@ entity zpuino_psk is
 end entity zpuino_psk;
 
 architecture behave of zpuino_psk is
+  --
+  -- Define the accumulator associated with the NCO
+  --
+  component zpuino_dds_acc is
+    port (
+      clk:    in  std_logic;
+      reset:  in  std_logic;
+      inc_hi: in  std_logic_vector(7 downto 0);
+      inc_lo: in  std_logic_vector(23 downto 0);
+      carry:  out std_logic;
+      q:      out std_logic_vector(7 downto 0)
+  );
+  end component zpuino_dds_acc;
+
   -- 
   -- Define the ROM used to hold the NCO values.
   --
@@ -76,29 +94,74 @@ architecture behave of zpuino_psk is
   end component zpuino_dds_rom;
   
   --
-  -- Define the accumulator associated with the NCO
+  -- PSK phase accumulator.
   --
-  component zpuino_psk_rom_acc is
+  component zpuino_phase_acc is
     port (
-      clk:    in  std_logic;
-      reset:  in  std_logic;
-      inc_hi: in  std_logic_vector(7 downto 0);
-      inc_lo: in  std_logic_vector(23 downto 0);
-      carry:  out std_logic;
-      q:      out std_logic_vector(7 downto 0)
+    clk:             in  std_logic;
+    reset:           in  std_logic;
+    data_out_enable: in  std_logic;
+    q:               out std_logic_vector(7 downto 0);
+    carry:           out std_logic  
   );
-  end component zpuino_psk_rom_acc;
+  end component zpuino_phase_acc;
   
-  signal psk_dat_o      : std_logic_vector(pskwidth - 1 downto 0);  -- psk output signal
-  signal dds_rom_addr_i : std_logic_vector(7 downto 0);             -- psk rom address
-  signal dds_rom_o      : signed(7 downto 0);                       -- rom output
+  --
+  -- PSK phase shifter
+  --
+  component zpuino_phase_shifter is
+  port (
+    clk:             in  std_logic;
+    reset:           in  std_logic;
+    i_data_in:       in  signed(7 downto 0);
+    q_data_in:       in  signed(7 downto 0);
+    phase_in:        in  std_logic_vector(NUMBER_OF_SHIFTS downto 0);
+    i_data_out:      out signed(7 downto 0);
+    q_data_out:      out signed(7 downto 0);
+    phase_out:       out std_logic_vector(NUMBER_OF_SHIFTS downto 0)
+  );
+  end component zpuino_phase_shifter;
+
+  -- Signals associated with the NCO accumulator.
   signal acc_reg_o      : std_logic_vector(7 downto 0);             -- register to hold accumulator value
   signal acc_inc_hi_i   : std_logic_vector(7 downto 0);             -- upper accumulator increment.
   signal acc_inc_lo_i   : std_logic_vector(23 downto 0);            -- lower accumulator increment.
 
+  -- Signals associated with the DDS rom.
+  signal dds_rom_addr_i : std_logic_vector(7 downto 0);             -- psk rom address
+  signal dds_rom_o      : signed(7 downto 0);                       -- rom output
+
+  -- Signals associated with the phase accumulator.
+  signal phase_acc_count: std_logic_vector(7 downto 0);             -- phase accumulator output.
+  signal phase_acc_carry: std_logic;                                -- phase accumulator carry signal.
+
+  -- Signals associated with the phase shifter.
+  signal i_data_in      : signed(IQ_BUS_WIDTH-1 downto 0);
+  signal q_data_in      : signed(IQ_BUS_WIDTH-1 downto 0);
+  signal phase_in       : std_logic_vector(NUMBER_OF_SHIFTS downto 0);
+  signal i_data_out     : signed(IQ_BUS_WIDTH-1 downto 0);
+  signal q_data_out     : signed(IQ_BUS_WIDTH-1 downto 0);
+  signal phase_out      : std_logic_vector(NUMBER_OF_SHIFTS downto 0);
+  
+  -- Connecting signals.
+  signal psk_dat_o      : std_logic_vector(pskwidth - 1 downto 0);  -- psk output signal
+
 begin
   --
   -- Declare component instances.
+  --
+  -- Instance of the NCO accumulator
+  --
+  dds_acc: zpuino_dds_acc
+  port map (
+    clk     => wb_clk_i,            -- wishbone clock signal
+    reset   => wb_rst_i,            -- wishbone reset signal
+    inc_hi  => acc_inc_hi_i,        -- 7 downto 0
+    inc_lo  => acc_inc_lo_i,        -- 23 downto 0
+    carry   => open,
+    q       => acc_reg_o            -- 7 downto 0
+  );
+  
   --
   -- Instance of the NCO rom.
   --
@@ -107,18 +170,32 @@ begin
     addr_i  => dds_rom_addr_i,      -- 7 downto 0
     data_o  => dds_rom_o            -- 7 downto 0
   );
-    
+      
   --
-  -- Instance of the NCO accumulator
+  -- Instance of the phase accumulator.
   --
-  psk_rom_acc: zpuino_psk_rom_acc
+  phase_acc: zpuino_phase_acc
   port map (
-    clk     => wb_clk_i,            -- wishbone clock signal
-    reset   => wb_rst_i,            -- wishbone reset signal
-    inc_hi  => acc_inc_hi_i,        -- 7 downto 0
-    inc_lo  => acc_inc_lo_i,        -- 23 downto 0
-    carry   => open,
-    q       => acc_reg_o            -- 7 downto 0
+    clk => wb_clk_i,                -- wishbone clock signal
+    reset => wb_rst_i,              -- wishbone reset signal
+    data_out_enable => '1',
+    q => phase_acc_count,           -- phase acc output
+    carry => phase_acc_carry        -- phase acc carry
+  );
+  
+  --
+  -- Instance of the phase shifter.
+  --
+  phase_shfiter: zpuino_phase_shifter
+  port map (
+    clk => wb_clk_i,                -- wishbone clock signal
+    reset => wb_rst_i,              -- wishbone reset signal
+    i_data_in => i_data_in,         -- in-phase data in
+    q_data_in => q_data_in,         -- quadrature data in
+    phase_in => phase_in,           -- phase shift in
+    i_data_out => i_data_out,       -- in-phase data out
+    q_data_out => q_data_out,       -- quadrature data out
+    phase_out => phase_out          -- phase shift out
   );
   
   --
@@ -147,7 +224,7 @@ begin
   tx <= psk_dat_o;
   
   --
-  -- Processing loop.
+  -- DDS processing loop.
   --
   process(wb_clk_i, wb_rst_i)
   begin
@@ -155,21 +232,40 @@ begin
       --
       -- Reset signal is set.
       --
-      acc_inc_hi_i <= (others => '0');
-      acc_inc_lo_i <= (others => '0');
+      i_data_in <= (others => '0');
+      q_data_in <= (others => '0');
+      phase_in  <= (others => '0');
       
     elsif (rising_edge(wb_clk_i)) then
       --
       -- On the rising edge of the clock...
-      ---
+      --
       if (wb_cyc_i='1' and wb_stb_i='1' and wb_we_i='1') then
         -- 
         -- Store the increment value.
         --
-        acc_inc_hi_i <= wb_dat_i(31 downto 24);
-        acc_inc_lo_i <= wb_dat_i(23 downto 0);
+        phase_in  <= 
+            wb_dat_i(NUMBER_OF_SHIFTS+2*IQ_BUS_WIDTH downto 2*IQ_BUS_WIDTH);
+        i_data_in <= 
+            signed(wb_dat_i(2*IQ_BUS_WIDTH-1 downto  IQ_BUS_WIDTH));
+        q_data_in <= 
+            signed(wb_dat_i(IQ_BUS_WIDTH-1  downto  0));
       end if;
     end if;
+  end process;
+  
+  --
+  -- Put the output on the address out lines.
+  --
+  process(wb_adr_i, phase_out, i_data_out, q_data_out)
+  begin
+    wb_dat_o <= (others => '0');
+    wb_dat_o(NUMBER_OF_SHIFTS+2*IQ_BUS_WIDTH downto 2*IQ_BUS_WIDTH) <= 
+        phase_out;
+    wb_dat_o(2*IQ_BUS_WIDTH-1 downto  IQ_BUS_WIDTH) <= 
+        std_logic_vector(i_data_out);
+    wb_dat_o(IQ_BUS_WIDTH-1  downto  0) <= 
+        std_logic_vector(q_data_out);
   end process;
   
 end behave;

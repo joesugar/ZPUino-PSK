@@ -6,7 +6,7 @@ use ieee.math_real.all;
 --
 -- Core entity definition
 --
-entity zpuino_psk_rom_acc is
+entity zpuino_dds_acc is
   generic (
     N_LO: integer := 24;      -- number of lo acc bits
     N_HI: integer := 8;       -- number of hi acc bits
@@ -21,12 +21,12 @@ entity zpuino_psk_rom_acc is
     carry:  out std_logic;
     q:      out std_logic_vector(N_HI-1 downto 0)
   );
-end zpuino_psk_rom_acc;
+end zpuino_dds_acc;
 
 --
 -- Core architecture
 --
-architecture arch of zpuino_psk_rom_acc is
+architecture arch of zpuino_dds_acc is
   --
   -- Internal signals
   --
