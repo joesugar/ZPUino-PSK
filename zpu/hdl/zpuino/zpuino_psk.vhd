@@ -35,6 +35,7 @@
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
+use std.textio.all;
 
 library work;
 use work.zpu_config.all;
@@ -47,7 +48,9 @@ entity zpuino_psk is
     
     -- Constants associated with the phase shifter.
     NUMBER_OF_SHIFTS : integer := 7;
-    IQ_BUS_WIDTH : integer := 8
+    IQ_BUS_WIDTH : integer := 8;
+    PSK_ROM_ADDRESS_WIDTH : integer := 8;
+    PSK_DATA_WIDTH : integer := 8           -- NUMBER_OF_SHIFTS+1
   );
   port (
     -- Wishbone signals.
@@ -73,13 +76,13 @@ architecture behave of zpuino_psk is
   -- Define the accumulator associated with the NCO
   --
   component zpuino_dds_acc is
-    port (
-      clk:    in  std_logic;
-      reset:  in  std_logic;
-      inc_hi: in  std_logic_vector(7 downto 0);
-      inc_lo: in  std_logic_vector(23 downto 0);
-      carry:  out std_logic;
-      q:      out std_logic_vector(7 downto 0)
+  port (
+    clk:    in  std_logic;
+    reset:  in  std_logic;
+    inc_hi: in  std_logic_vector(7 downto 0);
+    inc_lo: in  std_logic_vector(23 downto 0);
+    carry:  out std_logic;
+    q:      out std_logic_vector(7 downto 0)
   );
   end component zpuino_dds_acc;
 
@@ -87,9 +90,9 @@ architecture behave of zpuino_psk is
   -- Define the ROM used to hold the NCO values.
   --
   component zpuino_dds_rom is
-    port (
-      addr_i    : in  std_logic_vector(7 downto 0); -- 8 bits wide
-      data_o    : out signed(7 downto 0)            -- 8 bits wide
+  port (
+    addr_i    : in  std_logic_vector(7 downto 0); -- 8 bits wide
+    data_o    : out signed(7 downto 0)            -- 8 bits wide
   );
   end component zpuino_dds_rom;
   
@@ -97,7 +100,7 @@ architecture behave of zpuino_psk is
   -- PSK phase accumulator.
   --
   component zpuino_phase_acc is
-    port (
+  port (
     clk:             in  std_logic;
     reset:           in  std_logic;
     data_out_enable: in  std_logic;
@@ -143,9 +146,35 @@ architecture behave of zpuino_psk is
   signal q_data_out     : signed(IQ_BUS_WIDTH-1 downto 0);
   signal phase_out      : std_logic_vector(NUMBER_OF_SHIFTS downto 0);
   
+  -- Signals associated with the phase shift ROM.
+  signal phase_shift_index: unsigned(PSK_ROM_ADDRESS_WIDTH-1 downto 0);
+  
   -- Connecting signals.
   signal psk_dat_o      : std_logic_vector(pskwidth - 1 downto 0);  -- psk output signal
 
+  --
+  -- Declarations used to define the array of ROM data.
+  --
+  type rom_array is array(2**PSK_ROM_ADDRESS_WIDTH-1 downto 0) 
+      of std_logic_vector(NUMBER_OF_SHIFTS downto 0);
+      
+  impure function rom_init(filename : string) return rom_array is
+    file rom_file : text open read_mode is filename;
+    variable rom_line : line;
+    variable rom_value : bit_vector(NUMBER_OF_SHIFTS downto 0);
+    variable temp : rom_array;
+  begin
+    for rom_index in 0 to 2**PSK_ROM_ADDRESS_WIDTH-1 loop
+      readline(rom_file, rom_line);
+      read(rom_line, rom_value);
+      temp(rom_index) := to_stdlogicvector(rom_value);
+    end loop;
+    return temp;
+  end function;
+  
+  constant phase_shift_rom_array : rom_array := rom_init(filename =>
+      "/home/joseph/Papilio/ZPUino-HDL/zpu/hdl/zpuino/phase_shift_rom.txt"); 
+      
 begin
   --
   -- Declare component instances.
@@ -186,7 +215,7 @@ begin
   --
   -- Instance of the phase shifter.
   --
-  phase_shfiter: zpuino_phase_shifter
+  phase_shifter: zpuino_phase_shifter
   port map (
     clk => wb_clk_i,                -- wishbone clock signal
     reset => wb_rst_i,              -- wishbone reset signal
@@ -227,14 +256,15 @@ begin
   -- DDS processing loop.
   --
   process(wb_clk_i, wb_rst_i)
+    variable address : unsigned(PSK_ROM_ADDRESS_WIDTH-1 downto 0);
   begin
     if (wb_rst_i = '1') then
       --
       -- Reset signal is set.
       --
+      phase_in  <= (others => '0');
       i_data_in <= (others => '0');
       q_data_in <= (others => '0');
-      phase_in  <= (others => '0');
       
     elsif (rising_edge(wb_clk_i)) then
       --
@@ -244,12 +274,10 @@ begin
         -- 
         -- Store the increment value.
         --
-        phase_in  <= 
-            wb_dat_i(NUMBER_OF_SHIFTS+2*IQ_BUS_WIDTH downto 2*IQ_BUS_WIDTH);
-        i_data_in <= 
-            signed(wb_dat_i(2*IQ_BUS_WIDTH-1 downto  IQ_BUS_WIDTH));
-        q_data_in <= 
-            signed(wb_dat_i(IQ_BUS_WIDTH-1  downto  0));
+        address := unsigned(wb_dat_i(PSK_ROM_ADDRESS_WIDTH-1 downto 0));
+        phase_in  <= phase_shift_rom_array(to_integer(address));
+        i_data_in <= X"40";
+        q_data_in <= X"00";
       end if;
     end if;
   end process;
@@ -257,14 +285,14 @@ begin
   --
   -- Put the output on the address out lines.
   --
-  process(wb_adr_i, phase_out, i_data_out, q_data_out)
+  process(wb_adr_i, i_data_out, q_data_out)
   begin
     wb_dat_o <= (others => '0');
     wb_dat_o(NUMBER_OF_SHIFTS+2*IQ_BUS_WIDTH downto 2*IQ_BUS_WIDTH) <= 
         phase_out;
-    wb_dat_o(2*IQ_BUS_WIDTH-1 downto  IQ_BUS_WIDTH) <= 
+    wb_dat_o(2*IQ_BUS_WIDTH-1 downto IQ_BUS_WIDTH) <= 
         std_logic_vector(i_data_out);
-    wb_dat_o(IQ_BUS_WIDTH-1  downto  0) <= 
+    wb_dat_o(IQ_BUS_WIDTH-1 downto  0) <= 
         std_logic_vector(q_data_out);
   end process;
   
