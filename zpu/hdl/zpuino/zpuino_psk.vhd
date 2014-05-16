@@ -67,7 +67,7 @@ entity zpuino_psk is
     wb_inta_o:out std_logic;
 
     -- Other required signals.
-    tx:       out std_logic_vector(pskwidth-1 downto 0)
+    tx: out std_logic_vector(1 downto 0)
   );
 end entity zpuino_psk;
 
@@ -125,6 +125,21 @@ architecture behave of zpuino_psk is
   );
   end component zpuino_phase_shifter;
 
+  --
+  -- Simple D2A converter
+  --
+  component simple_sigmadelta is
+  generic (
+    BITS: integer := 8
+  );
+  port (
+    clk:      in std_logic;
+    rst:      in std_logic;
+    data_in:  in std_logic_vector(BITS-1 downto 0);
+    data_out: out std_logic
+    );
+  end component simple_sigmadelta;
+  
   -- Signals associated with the NCO accumulator.
   signal acc_reg_o      : std_logic_vector(7 downto 0);             -- register to hold accumulator value
   signal acc_inc_hi_i   : std_logic_vector(7 downto 0);             -- upper accumulator increment.
@@ -145,6 +160,10 @@ architecture behave of zpuino_psk is
   signal i_data_out     : signed(IQ_BUS_WIDTH-1 downto 0);
   signal q_data_out     : signed(IQ_BUS_WIDTH-1 downto 0);
   signal phase_out      : std_logic_vector(NUMBER_OF_SHIFTS downto 0);
+  
+  -- Signals associated with the audio out
+  signal i_audio_out    : std_logic_vector(IQ_BUS_WIDTH-1 downto 0);
+  signal q_audio_out    : std_logic_vector(IQ_BUS_WIDTH-1 downto 0);
   
   -- Signals associated with the phase shift ROM.
   signal phase_shift_index: unsigned(PSK_ROM_ADDRESS_WIDTH-1 downto 0);
@@ -228,6 +247,31 @@ begin
   );
   
   --
+  -- Instance of a simple 2 channel D2A converter.
+  --
+  psk_d2a_i: simple_sigmadelta
+  generic map (
+    BITS => 8
+  ) 
+  port map (
+    clk       => wb_clk_i,
+    rst       => wb_rst_i,
+    data_in   => std_logic_vector(i_audio_out),
+    data_out  => tx(1)
+  );
+
+  psk_d2a_q: simple_sigmadelta
+  generic map (
+    BITS => 8
+  ) 
+  port map (
+    clk       => wb_clk_i,
+    rst       => wb_rst_i,
+    data_in   => std_logic_vector(q_audio_out),
+    data_out  => tx(0)
+  );
+      
+  --
   -- Start the actual code here.
   --
   -- Acknowledge all tranfers 
@@ -244,19 +288,12 @@ begin
   --
   dds_rom_addr_i <= acc_reg_o;
   
-  -- 
-  -- Outgoing signals
-  -- Data out is taken from the upper bits of the rom data.
-  --
-  psk_dat_o(pskwidth - 1 downto 0) <= 
-    std_logic_vector(dds_rom_o(7 downto 7 - pskwidth + 1));
-  tx <= psk_dat_o;
-  
   --
   -- DDS processing loop.
   --
   process(wb_clk_i, wb_rst_i)
     variable address : unsigned(PSK_ROM_ADDRESS_WIDTH-1 downto 0);
+    variable phase   : std_logic_vector(NUMBER_OF_SHIFTS downto 0);
   begin
     if (wb_rst_i = '1') then
       --
@@ -275,7 +312,10 @@ begin
         -- Store the increment value.
         --
         address := unsigned(wb_dat_i(PSK_ROM_ADDRESS_WIDTH-1 downto 0));
-        phase_in  <= phase_shift_rom_array(to_integer(address));
+        phase := phase_shift_rom_array(to_integer(address));
+        
+        phase_in(NUMBER_OF_SHIFTS downto 1) <= phase(NUMBER_OF_SHIFTS downto 1);
+        phase_in(0) <= wb_dat_i(PSK_ROM_ADDRESS_WIDTH);
         i_data_in <= X"40";
         q_data_in <= X"00";
       end if;
@@ -294,6 +334,9 @@ begin
         std_logic_vector(i_data_out);
     wb_dat_o(IQ_BUS_WIDTH-1 downto  0) <= 
         std_logic_vector(q_data_out);
+        
+    i_audio_out <= std_logic_vector(i_data_out + "10000000");
+    q_audio_out <= std_logic_vector(q_data_out + "10000000");
   end process;
   
 end behave;

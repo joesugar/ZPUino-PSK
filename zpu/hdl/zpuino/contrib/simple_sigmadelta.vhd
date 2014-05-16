@@ -45,12 +45,12 @@ entity simple_sigmadelta is
   generic (
     BITS: integer := 8
   );
-	port (
+  port (
     clk:      in std_logic;
     rst:      in std_logic;
     data_in:  in std_logic_vector(BITS-1 downto 0);
     data_out: out std_logic
-    );
+  );
 end entity simple_sigmadelta;
 
 architecture behave of simple_sigmadelta is

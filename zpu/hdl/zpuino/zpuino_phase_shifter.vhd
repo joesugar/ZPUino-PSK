@@ -156,11 +156,18 @@ begin
       -- 
       -- Pass the data down through the pipeline.
       --
-      shift_stream(0).i_data <= signed(
-          std_logic_vector(i_data_in) & std_logic_vector(to_unsigned(0, NUMBER_OF_SHIFTS)));      
-      shift_stream(0).q_data <= signed(
-          std_logic_vector(q_data_in) & std_logic_vector(to_unsigned(0, NUMBER_OF_SHIFTS)));
-      shift_stream(0).phase  <= phase_in;
+      if phase_in(0) = '0' then
+        shift_stream(0).i_data <= signed(
+            std_logic_vector(i_data_in) & std_logic_vector(to_unsigned(0, NUMBER_OF_SHIFTS)));      
+        shift_stream(0).q_data <= signed(
+            std_logic_vector(q_data_in) & std_logic_vector(to_unsigned(0, NUMBER_OF_SHIFTS)));
+      else
+        shift_stream(0).i_data <= -signed(
+            std_logic_vector(i_data_in) & std_logic_vector(to_unsigned(0, NUMBER_OF_SHIFTS)));      
+        shift_stream(0).q_data <= -signed(
+            std_logic_vector(q_data_in) & std_logic_vector(to_unsigned(0, NUMBER_OF_SHIFTS)));
+      end if;      
+      shift_stream(0).phase <= phase_in;
   
       for i in 1 to NUMBER_OF_SHIFTS loop
         if or_reduce(shift_stream(i-1).phase and shift_stream(i).shift_mask) = '0' then

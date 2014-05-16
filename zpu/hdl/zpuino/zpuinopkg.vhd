@@ -678,12 +678,12 @@ package zpuinopkg is
   generic (
     BITS: integer := 8
   );
-	port (
+  port (
     clk:      in std_logic;
     rst:      in std_logic;
     data_in:  in std_logic_vector(BITS-1 downto 0);
     data_out: out std_logic
-    );
+  );
   end component simple_sigmadelta;
   
   component zpuino_serialreset is
@@ -717,7 +717,7 @@ package zpuinopkg is
     wb_inta_o:out std_logic;
 
     -- PSK outgoing signal.
-    tx:       out std_logic_vector(pskwidth-1 downto 0)
+    tx:       out std_logic_vector(1 downto 0)
     );
   end component zpuino_psk;  
 
