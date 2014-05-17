@@ -50,7 +50,10 @@ entity zpuino_psk is
     NUMBER_OF_SHIFTS : integer := 7;
     IQ_BUS_WIDTH : integer := 8;
     PSK_ROM_ADDRESS_WIDTH : integer := 8;
-    PSK_DATA_WIDTH : integer := 8           -- NUMBER_OF_SHIFTS+1
+    PSK_DATA_WIDTH : integer := 8;          -- NUMBER_OF_SHIFTS+1
+    DDS_ROM_DATA_WIDTH : integer := 8;
+    DDS_ROM_ADDRESS_WIDTH : integer := 8;
+    DDS_INC_HI_WIDTH : integer := 8
   );
   port (
     -- Wishbone signals.
@@ -79,10 +82,10 @@ architecture behave of zpuino_psk is
   port (
     clk:    in  std_logic;
     reset:  in  std_logic;
-    inc_hi: in  std_logic_vector(7 downto 0);
-    inc_lo: in  std_logic_vector(23 downto 0);
+    inc_hi: in  std_logic_vector(DDS_INC_HI_WIDTH-1 downto 0);
+    inc_lo: in  std_logic_vector(31-DDS_INC_HI_WIDTH downto 0);
     carry:  out std_logic;
-    q:      out std_logic_vector(7 downto 0)
+    q:      out std_logic_vector(DDS_ROM_ADDRESS_WIDTH-1 downto 0)
   );
   end component zpuino_dds_acc;
 
@@ -91,8 +94,8 @@ architecture behave of zpuino_psk is
   --
   component zpuino_dds_rom is
   port (
-    addr_i    : in  std_logic_vector(7 downto 0); -- 8 bits wide
-    data_o    : out signed(7 downto 0)            -- 8 bits wide
+    addr_i    : in  std_logic_vector(DDS_ROM_ADDRESS_WIDTH-1 downto 0); -- 8 bits wide
+    data_o    : out signed(DDS_ROM_DATA_WIDTH-1 downto 0) -- 8 bits wide
   );
   end component zpuino_dds_rom;
   
@@ -104,7 +107,7 @@ architecture behave of zpuino_psk is
     clk:             in  std_logic;
     reset:           in  std_logic;
     data_out_enable: in  std_logic;
-    q:               out std_logic_vector(7 downto 0);
+    q:               out std_logic_vector(DDS_ROM_ADDRESS_WIDTH-1 downto 0);
     carry:           out std_logic  
   );
   end component zpuino_phase_acc;
@@ -116,11 +119,11 @@ architecture behave of zpuino_psk is
   port (
     clk:             in  std_logic;
     reset:           in  std_logic;
-    i_data_in:       in  signed(7 downto 0);
-    q_data_in:       in  signed(7 downto 0);
+    i_data_in:       in  signed(DDS_ROM_DATA_WIDTH-1 downto 0);
+    q_data_in:       in  signed(DDS_ROM_DATA_WIDTH-1 downto 0);
     phase_in:        in  std_logic_vector(NUMBER_OF_SHIFTS downto 0);
-    i_data_out:      out signed(7 downto 0);
-    q_data_out:      out signed(7 downto 0);
+    i_data_out:      out signed(DDS_ROM_DATA_WIDTH-1 downto 0);
+    q_data_out:      out signed(DDS_ROM_DATA_WIDTH-1 downto 0);
     phase_out:       out std_logic_vector(NUMBER_OF_SHIFTS downto 0)
   );
   end component zpuino_phase_shifter;
@@ -140,14 +143,14 @@ architecture behave of zpuino_psk is
     );
   end component simple_sigmadelta;
   
-  -- Signals associated with the NCO accumulator.
-  signal acc_reg_o      : std_logic_vector(7 downto 0);             -- register to hold accumulator value
-  signal acc_inc_hi_i   : std_logic_vector(7 downto 0);             -- upper accumulator increment.
-  signal acc_inc_lo_i   : std_logic_vector(23 downto 0);            -- lower accumulator increment.
+  -- Signals associated with the DDS NCO accumulator.
+  signal acc_reg_o      : std_logic_vector(DDS_ROM_ADDRESS_WIDTH-1 downto 0); -- register to hold accumulator value
+  signal acc_inc_hi_i   : std_logic_vector(DDS_INC_HI_WIDTH-1 downto 0);      -- upper accumulator increment.
+  signal acc_inc_lo_i   : std_logic_vector(31-DDS_INC_HI_WIDTH downto 0);     -- lower accumulator increment.
 
   -- Signals associated with the DDS rom.
-  signal dds_rom_addr_i : std_logic_vector(7 downto 0);             -- psk rom address
-  signal dds_rom_o      : signed(7 downto 0);                       -- rom output
+  signal dds_rom_addr_i : std_logic_vector(DDS_ROM_ADDRESS_WIDTH-1 downto 0); -- psk rom address
+  signal dds_rom_o      : signed(DDS_ROM_DATA_WIDTH-1 downto 0);    -- rom output
 
   -- Signals associated with the phase accumulator.
   signal phase_acc_count: std_logic_vector(7 downto 0);             -- phase accumulator output.
@@ -286,7 +289,9 @@ begin
   --
   -- Connect accumulator register output to the ROM address lines.
   --
-  dds_rom_addr_i <= acc_reg_o;
+  dds_rom_addr_i <= acc_reg_o;  
+  q_data_in <= X"00";
+  i_data_in <= dds_rom_o;
   
   --
   -- DDS processing loop.
@@ -300,24 +305,36 @@ begin
       -- Reset signal is set.
       --
       phase_in  <= (others => '0');
-      i_data_in <= (others => '0');
-      q_data_in <= (others => '0');
+      acc_inc_hi_i <= (others => '0');
+      acc_inc_lo_i <= (others => '0');
       
     elsif (rising_edge(wb_clk_i)) then
       --
       -- On the rising edge of the clock...
       --
       if (wb_cyc_i='1' and wb_stb_i='1' and wb_we_i='1') then
-        -- 
-        -- Store the increment value.
-        --
-        address := unsigned(wb_dat_i(PSK_ROM_ADDRESS_WIDTH-1 downto 0));
-        phase := phase_shift_rom_array(to_integer(address));
+        case wb_adr_i(4 downto 2) is
+          when "000" =>
+            -- 
+            -- Store the incoming phase value.
+            --
+            address := unsigned(wb_dat_i(PSK_ROM_ADDRESS_WIDTH-1 downto 0));
+            phase := phase_shift_rom_array(to_integer(address));
         
-        phase_in(NUMBER_OF_SHIFTS downto 1) <= phase(NUMBER_OF_SHIFTS downto 1);
-        phase_in(0) <= wb_dat_i(PSK_ROM_ADDRESS_WIDTH);
-        i_data_in <= X"40";
-        q_data_in <= X"00";
+            phase_in(NUMBER_OF_SHIFTS downto 1) <= 
+                phase(NUMBER_OF_SHIFTS downto 1);
+            phase_in(0) <= 
+                wb_dat_i(PSK_ROM_ADDRESS_WIDTH);
+          when "001" =>
+            --
+            -- Update the DDS increment value.
+            --
+            acc_inc_hi_i <= 
+                std_logic_vector(wb_dat_i(31 downto 31-DDS_INC_HI_WIDTH+1));
+            acc_inc_lo_i <= 
+                std_logic_vector(wb_dat_i(31-DDS_INC_HI_WIDTH downto 0));
+          when others =>
+        end case;
       end if;
     end if;
   end process;

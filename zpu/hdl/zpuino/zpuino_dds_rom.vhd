@@ -32,12 +32,12 @@ architecture rtl of zpuino_dds_rom is
   -- Function to define the contents of the ROM
   --
   function init_mem return mem_type is
-    constant SCALE : real := 2**(real(DATA_WIDTH - 2)) - 1.0;
+    constant SCALE : real := 2**(real(DATA_WIDTH - 2));
     variable temp_mem : mem_type;
   begin
     for i in 0 to MEM_DEPTH - 1 loop
       temp_mem(i) := 
-        to_signed(integer(SCALE * (1.0 + cos(2.0 * MATH_PI * real(i) / real(MEM_DEPTH)))), DATA_WIDTH); 
+        to_signed(integer(SCALE * cos(2.0 * MATH_PI * real(i) / real(MEM_DEPTH))), DATA_WIDTH); 
     end loop;
     return temp_mem;
   end;
