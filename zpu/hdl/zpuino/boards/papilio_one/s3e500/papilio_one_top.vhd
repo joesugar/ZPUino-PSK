@@ -129,6 +129,7 @@ architecture behave of papilio_one_top is
   signal spi2_sck: std_logic;
 
   signal psk_tx: std_logic_vector(1 downto 0);
+  signal block_debug: std_logic_vector(7 downto 0);
   
   signal uart_enabled: std_logic;
 
@@ -517,7 +518,8 @@ begin
     wb_inta_o => slot_interrupt(8),
     
     -- PSK transmit vector (1 downto 0)
-    tx => psk_tx
+    tx => psk_tx,
+    debug => block_debug
   );
 
   --
@@ -736,6 +738,16 @@ begin
     gpio_spp_data(6)  <= uart2_tx;                -- PPS6 : UART2 DATA TRANSMIT
     gpio_spp_data(7)  <= psk_tx(1);               -- PPS7 : PSK_TX I CHANNEL
     gpio_spp_data(8)  <= psk_tx(0);               -- PPS8 : PSK_TX Q CHANNEL
+    
+    -- PSK debug lines
+    gpio_spp_data(40) <= block_debug(0);          -- PPS40: DEBUG CHANNEL 0
+    gpio_spp_data(41) <= block_debug(1);          -- PPS41: DEBUG CHANNEL 1
+    gpio_spp_data(42) <= block_debug(2);          -- PPS42: DEBUG CHANNEL 2
+    gpio_spp_data(43) <= block_debug(3);          -- PPS43: DEBUG CHANNEL 3
+    gpio_spp_data(44) <= block_debug(4);          -- PPS44: DEBUG CHANNEL 4
+    gpio_spp_data(45) <= block_debug(5);          -- PPS45: DEBUG CHANNEL 5
+    gpio_spp_data(46) <= block_debug(6);          -- PPS46: DEBUG CHANNEL 6
+    gpio_spp_data(47) <= block_debug(7);          -- PPS47: DEBUG CHANNEL 7
     
     -- GPIO input pins
     spi2_miso <= gpio_spp_read(0);                -- PPS0 : USPI MISO

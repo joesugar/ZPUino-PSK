@@ -70,7 +70,8 @@ entity zpuino_psk is
     wb_inta_o:out std_logic;
 
     -- Other required signals.
-    tx: out std_logic_vector(1 downto 0)
+    tx: out std_logic_vector(1 downto 0);
+    debug : out std_logic_vector(7 downto 0)
   );
 end entity zpuino_psk;
 
@@ -106,9 +107,9 @@ architecture behave of zpuino_psk is
   port (
     clk:             in  std_logic;
     reset:           in  std_logic;
-    data_out_enable: in  std_logic;
-    q:               out std_logic_vector(DDS_ROM_ADDRESS_WIDTH-1 downto 0);
-    carry:           out std_logic  
+    serial_data_in:  in  std_logic;
+    q:               out unsigned(DDS_ROM_ADDRESS_WIDTH-1 downto 0);
+    inversion:       out std_logic
   );
   end component zpuino_phase_acc;
   
@@ -144,35 +145,36 @@ architecture behave of zpuino_psk is
   end component simple_sigmadelta;
   
   -- Signals associated with the DDS NCO accumulator.
-  signal acc_reg_o      : std_logic_vector(DDS_ROM_ADDRESS_WIDTH-1 downto 0); -- register to hold accumulator value
-  signal acc_inc_hi_i   : std_logic_vector(DDS_INC_HI_WIDTH-1 downto 0);      -- upper accumulator increment.
-  signal acc_inc_lo_i   : std_logic_vector(31-DDS_INC_HI_WIDTH downto 0);     -- lower accumulator increment.
+  signal dds_acc_reg_o    : std_logic_vector(DDS_ROM_ADDRESS_WIDTH-1 downto 0); -- register to hold accumulator value
+  signal dds_acc_inc_hi_i : std_logic_vector(DDS_INC_HI_WIDTH-1 downto 0);      -- upper accumulator increment.
+  signal dds_acc_inc_lo_i : std_logic_vector(31-DDS_INC_HI_WIDTH downto 0);     -- lower accumulator increment.
 
   -- Signals associated with the DDS rom.
-  signal dds_rom_addr_i : std_logic_vector(DDS_ROM_ADDRESS_WIDTH-1 downto 0); -- psk rom address
-  signal dds_rom_o      : signed(DDS_ROM_DATA_WIDTH-1 downto 0);    -- rom output
+  signal dds_rom_addr_i   : std_logic_vector(DDS_ROM_ADDRESS_WIDTH-1 downto 0); -- psk rom address
+  signal dds_rom_o        : signed(DDS_ROM_DATA_WIDTH-1 downto 0);    -- rom output
 
   -- Signals associated with the phase accumulator.
-  signal phase_acc_count: std_logic_vector(7 downto 0);             -- phase accumulator output.
-  signal phase_acc_carry: std_logic;                                -- phase accumulator carry signal.
-
+  signal psk_phase_acc_count  : unsigned(7 downto 0);         -- phase accumulator output.
+  signal psk_phase_inversion  : std_logic;
+  signal psk_serial_data_in   : std_logic;
+  
   -- Signals associated with the phase shifter.
-  signal i_data_in      : signed(IQ_BUS_WIDTH-1 downto 0);
-  signal q_data_in      : signed(IQ_BUS_WIDTH-1 downto 0);
-  signal phase_in       : std_logic_vector(NUMBER_OF_SHIFTS downto 0);
-  signal i_data_out     : signed(IQ_BUS_WIDTH-1 downto 0);
-  signal q_data_out     : signed(IQ_BUS_WIDTH-1 downto 0);
-  signal phase_out      : std_logic_vector(NUMBER_OF_SHIFTS downto 0);
+  signal i_data_in        : signed(IQ_BUS_WIDTH-1 downto 0);
+  signal q_data_in        : signed(IQ_BUS_WIDTH-1 downto 0);
+  signal phase_in         : std_logic_vector(NUMBER_OF_SHIFTS downto 0);
+  signal i_data_out       : signed(IQ_BUS_WIDTH-1 downto 0);
+  signal q_data_out       : signed(IQ_BUS_WIDTH-1 downto 0);
+  signal phase_out        : std_logic_vector(NUMBER_OF_SHIFTS downto 0);
   
   -- Signals associated with the audio out
-  signal i_audio_out    : std_logic_vector(IQ_BUS_WIDTH-1 downto 0);
-  signal q_audio_out    : std_logic_vector(IQ_BUS_WIDTH-1 downto 0);
+  signal i_audio_out      : std_logic_vector(IQ_BUS_WIDTH-1 downto 0);
+  signal q_audio_out      : std_logic_vector(IQ_BUS_WIDTH-1 downto 0);
   
   -- Signals associated with the phase shift ROM.
   signal phase_shift_index: unsigned(PSK_ROM_ADDRESS_WIDTH-1 downto 0);
   
   -- Connecting signals.
-  signal psk_dat_o      : std_logic_vector(pskwidth - 1 downto 0);  -- psk output signal
+  signal psk_dat_o        : std_logic_vector(pskwidth - 1 downto 0);  -- psk output signal
 
   --
   -- Declarations used to define the array of ROM data.
@@ -195,11 +197,15 @@ architecture behave of zpuino_psk is
   end function;
   
   constant phase_shift_rom_array : rom_array := rom_init(filename =>
-      "/home/joseph/Papilio/ZPUino-HDL/zpu/hdl/zpuino/phase_shift_rom.txt"); 
-      
+      "/home/joseph/Papilio/ZPUino-HDL/zpu/hdl/zpuino/phase_shift_rom.txt");    
+  
 begin
   --
   -- Declare component instances.
+  --
+  
+  --
+  -- REGION  DDS NCO
   --
   -- Instance of the NCO accumulator
   --
@@ -207,10 +213,10 @@ begin
   port map (
     clk     => wb_clk_i,            -- wishbone clock signal
     reset   => wb_rst_i,            -- wishbone reset signal
-    inc_hi  => acc_inc_hi_i,        -- 7 downto 0
-    inc_lo  => acc_inc_lo_i,        -- 23 downto 0
+    inc_hi  => dds_acc_inc_hi_i,        -- 7 downto 0
+    inc_lo  => dds_acc_inc_lo_i,        -- 23 downto 0
     carry   => open,
-    q       => acc_reg_o            -- 7 downto 0
+    q       => dds_acc_reg_o            -- 7 downto 0
   );
   
   --
@@ -221,19 +227,29 @@ begin
     addr_i  => dds_rom_addr_i,      -- 7 downto 0
     data_o  => dds_rom_o            -- 7 downto 0
   );
-      
+  --
+  -- END DDS NCO
+  --
+  
+  --
+  -- REGION PSK PHASE ACCUMULATOR
   --
   -- Instance of the phase accumulator.
   --
-  phase_acc: zpuino_phase_acc
+  psk_phase_acc: zpuino_phase_acc
   port map (
     clk => wb_clk_i,                -- wishbone clock signal
     reset => wb_rst_i,              -- wishbone reset signal
-    data_out_enable => '1',
-    q => phase_acc_count,           -- phase acc output
-    carry => phase_acc_carry        -- phase acc carry
+    serial_data_in => psk_serial_data_in,
+    q => psk_phase_acc_count,       -- phase acc output
+    inversion => psk_phase_inversion
   );
+  --
+  -- END PSK PHASE ACCUMULATOR
+  --
   
+  --
+  -- REGION CORDIC PHASE SHIFTER 
   --
   -- Instance of the phase shifter.
   --
@@ -248,7 +264,12 @@ begin
     q_data_out => q_data_out,       -- quadrature data out
     phase_out => phase_out          -- phase shift out
   );
+  --
+  -- END CORDIC PHASE SHIFTER
+  -- 
   
+  --
+  -- REGION D2A CONVERTERS
   --
   -- Instance of a simple 2 channel D2A converter.
   --
@@ -273,11 +294,14 @@ begin
     data_in   => std_logic_vector(q_audio_out),
     data_out  => tx(0)
   );
+  --
+  -- END D2A CONVERTERS
+  --
       
   --
-  -- Start the actual code here.
+  -- REGION ARCHITECTURE CODE
   --
-  -- Acknowledge all tranfers 
+  -- Acknowledge all tranfers per the wishbone spec.
   --
   wb_ack_o <= wb_stb_i and wb_cyc_i; 
   
@@ -289,24 +313,28 @@ begin
   --
   -- Connect accumulator register output to the ROM address lines.
   --
-  dds_rom_addr_i <= acc_reg_o;  
+  dds_rom_addr_i <= dds_acc_reg_o;  
   q_data_in <= X"00";
   i_data_in <= dds_rom_o;
+  
+  -- debug line
+  debug(0) <= psk_phase_inversion;
   
   --
   -- DDS processing loop.
   --
   process(wb_clk_i, wb_rst_i)
-    variable address : unsigned(PSK_ROM_ADDRESS_WIDTH-1 downto 0);
-    variable phase   : std_logic_vector(NUMBER_OF_SHIFTS downto 0);
+    variable address      : unsigned(PSK_ROM_ADDRESS_WIDTH-1 downto 0);
+    variable mapped_phase : std_logic_vector(NUMBER_OF_SHIFTS downto 0); 
   begin
     if (wb_rst_i = '1') then
       --
       -- Reset signal is set.
       --
+      psk_serial_data_in <= '0';
       phase_in  <= (others => '0');
-      acc_inc_hi_i <= (others => '0');
-      acc_inc_lo_i <= (others => '0');
+      dds_acc_inc_hi_i <= (others => '0');
+      dds_acc_inc_lo_i <= (others => '0');
       
     elsif (rising_edge(wb_clk_i)) then
       --
@@ -316,26 +344,29 @@ begin
         case wb_adr_i(4 downto 2) is
           when "000" =>
             -- 
-            -- Store the incoming phase value.
+            -- Store the incoming phase value to the phase shifter.
             --
-            address := unsigned(wb_dat_i(PSK_ROM_ADDRESS_WIDTH-1 downto 0));
-            phase := phase_shift_rom_array(to_integer(address));
-        
-            phase_in(NUMBER_OF_SHIFTS downto 1) <= 
-                phase(NUMBER_OF_SHIFTS downto 1);
-            phase_in(0) <= 
-                wb_dat_i(PSK_ROM_ADDRESS_WIDTH);
+            psk_serial_data_in <= wb_dat_i(0);
           when "001" =>
             --
             -- Update the DDS increment value.
             --
-            acc_inc_hi_i <= 
+            dds_acc_inc_hi_i <= 
                 std_logic_vector(wb_dat_i(31 downto 31-DDS_INC_HI_WIDTH+1));
-            acc_inc_lo_i <= 
+            dds_acc_inc_lo_i <= 
                 std_logic_vector(wb_dat_i(31-DDS_INC_HI_WIDTH downto 0));
           when others =>
         end case;
       end if;
+
+      -- Load the phase from the accumulator to the phase shifter.
+      address := psk_phase_acc_count;
+      mapped_phase := phase_shift_rom_array(to_integer(address));     
+      phase_in(NUMBER_OF_SHIFTS downto 1) <= 
+          mapped_phase(NUMBER_OF_SHIFTS downto 1);
+      phase_in(0) <= 
+          psk_phase_inversion;
+          
     end if;
   end process;
   
@@ -355,5 +386,8 @@ begin
     i_audio_out <= std_logic_vector(i_data_out + "10000000");
     q_audio_out <= std_logic_vector(q_data_out + "10000000");
   end process;
+  --
+  -- END ARCHITECTURE CODE
+  --
   
 end behave;

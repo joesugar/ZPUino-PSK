@@ -128,6 +128,8 @@ begin
   -- Read in the data and pass it through the pipeline.
   --
   process(clk, reset)
+    variable shift_right_i : signed(BUS_WIDTH+NUMBER_OF_SHIFTS-1 downto 0);
+    variable shift_right_q : signed(BUS_WIDTH+NUMBER_OF_SHIFTS-1 downto 0);
   begin
     if (reset = '1') then
       --
@@ -170,15 +172,29 @@ begin
       shift_stream(0).phase <= phase_in;
   
       for i in 1 to NUMBER_OF_SHIFTS loop
+        --
+        -- Calculate shifted values.
+        -- Does this way to fix problem with using shift_right for
+        -- division.
+        --
+        shift_right_i := shift_right(shift_stream(i-1).i_data, i-1);
+        shift_right_q := shift_right(shift_stream(i-1).q_data, i-1);
+        if (shift_right_i < 0) then
+          shift_right_i := shift_right_i + 1;
+        end if;
+        if (shift_right_q < 0) then
+          shift_right_q := shift_right_q + 1;
+        end if;
+        
         if or_reduce(shift_stream(i-1).phase and shift_stream(i).shift_mask) = '0' then
           --
           -- Mask is clear so angle to be shifted at this point is negative. 
           -- You're going to add the angle.  d = -1.
           --
           shift_stream(i).i_data <= 
-              shift_stream(i-1).i_data + shift_right(shift_stream(i-1).q_data, i-1);
+              shift_stream(i-1).i_data + shift_right_q;
           shift_stream(i).q_data <= 
-              shift_stream(i-1).q_data - shift_right(shift_stream(i-1).i_data, i-1);
+              shift_stream(i-1).q_data - shift_right_i;
           shift_stream(i).phase <= 
               shift_stream(i-1).phase;
         else
@@ -187,9 +203,9 @@ begin
           -- You're going to subtract the angle.  d = 1.
           --
           shift_stream(i).i_data <= 
-              shift_stream(i-1).i_data - shift_right(shift_stream(i-1).q_data, i-1); 
+              shift_stream(i-1).i_data - shift_right_q; 
           shift_stream(i).q_data <= 
-              shift_stream(i-1).q_data + shift_right(shift_stream(i-1).i_data, i-1);
+              shift_stream(i-1).q_data + shift_right_i;
           shift_stream(i).phase <= 
               shift_stream(i-1).phase;          
         end if;

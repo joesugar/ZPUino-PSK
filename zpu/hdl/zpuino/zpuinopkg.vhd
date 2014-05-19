@@ -717,7 +717,8 @@ package zpuinopkg is
     wb_inta_o:out std_logic;
 
     -- PSK outgoing signal.
-    tx:       out std_logic_vector(1 downto 0)
+    tx:       out std_logic_vector(1 downto 0);
+    debug:    out std_logic_vector(7 downto 0)
     );
   end component zpuino_psk;  
 
