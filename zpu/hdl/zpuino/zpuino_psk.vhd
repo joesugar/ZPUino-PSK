@@ -180,9 +180,11 @@ architecture behave of zpuino_psk is
   signal psk_dat_o        : std_logic_vector(pskwidth - 1 downto 0);  -- psk output signal
   
   -- PSK transmit data
-  signal uart_clock       : std_logic;
-  signal psk_xmit_data    : std_logic_vector(15 downto 0);
-  signal psk_xmit_reg     : std_logic_vector(15 downto 0);
+  signal uart_clock         : std_logic;
+  signal psk_xmit_data      : std_logic_vector(15 downto 0);
+  signal psk_xmit_data_flag : std_logic;
+  signal psk_xmit_reg       : std_logic_vector(15 downto 0);
+  signal psk_xmit_reg_flag  : std_logic;
 
   --
   -- Declarations used to define the array of ROM data.
@@ -343,6 +345,7 @@ begin
       phase_in  <= (others => '0');
       dds_acc_inc_hi_i <= (others => '0');
       dds_acc_inc_lo_i <= (others => '0');
+      psk_xmit_data_flag <= '0';
       
     elsif (rising_edge(wb_clk_i)) then
       --
@@ -354,7 +357,10 @@ begin
             -- 
             -- Store the incoming phase value to the phase shifter.
             --
-            psk_xmit_data <= wb_dat_i(15 downto 0);
+            if (psk_xmit_reg_flag = psk_xmit_data_flag) then
+              psk_xmit_data <= wb_dat_i(15 downto 0);
+              psk_xmit_data_flag <= not(psk_xmit_data_flag);
+            end if;
           when "001" =>
             --
             -- Update the DDS increment value.
@@ -385,16 +391,46 @@ begin
   process(wb_clk_i, wb_rst_i)
   begin
     if (wb_rst_i = '1') then
+      --
+      -- Initialize on reset.
+      --
       psk_xmit_reg <= (others => '0');
       psk_serial_data_in <= '0';
+      psk_xmit_reg_flag <= '0';
     elsif rising_edge(wb_clk_i) then
+      --
+      -- On the rising edge of the clock...
+      --
       if (uart_clock = '1') then
+        -- 
+        -- It's time to swap in a new bit.
+        --
         if (and_reduce(psk_xmit_reg) = '1') then
-          psk_serial_data_in <= psk_xmit_data(0);
-          psk_xmit_reg <= "1" & psk_xmit_data(15 downto 1);
+          --
+          -- Done transmitting the old value.
+          --
+          if (psk_xmit_data_flag = psk_xmit_reg_flag) then
+            --
+            -- New value isn't ready so just sent 0.
+            --
+            psk_serial_data_in <= '0';
+            psk_xmit_reg <= (others => '1');
+            psk_xmit_reg_flag <= psk_xmit_reg_flag;
+          else
+            --
+            -- New value is ready.  Read it in and send the first bit.
+            --
+            psk_serial_data_in <= psk_xmit_data(0);
+            psk_xmit_reg <= "1" & psk_xmit_data(15 downto 1);
+            psk_xmit_reg_flag <= not(psk_xmit_reg_flag);
+          end if;
         else
+          --
+          -- Still transmitting the current value so rotate the new bit in.
+          -- 
           psk_serial_data_in <= psk_xmit_reg(0);
           psk_xmit_reg <= "1" & psk_xmit_reg(15 downto 1);
+          psk_xmit_reg_flag <= psk_xmit_reg_flag;
         end if;
       end if;
     end if;
