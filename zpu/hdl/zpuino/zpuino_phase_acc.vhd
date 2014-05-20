@@ -115,13 +115,19 @@ begin
       -- data is sampled on the leading edge of the PSK bit period.
       --
       if ((r_reg_lo_next = 0) and (r_reg_hi_next = 0)) then
-        if (serial_data_in = PSK_0) then
-          if (r_inversion = '0') then
-            r_inversion <= '1';
-          else
-            r_inversion <= '0';
-          end if;
+        --
+        -- Calculate the new inversion flag.  If the bit just 
+        -- finished was a '1' then you want to keep the same
+        -- inversion.  Otherwise, invert it.
+        --
+        if (data_out_enable = '0') then
+          r_inversion <= not(r_inversion);
+        else
+          r_inversion <= r_inversion;
         end if;
+        --
+        -- The data out enable flag matches the data being sent.
+        --
         data_out_enable <= serial_data_in;
       end if;
     end if;
