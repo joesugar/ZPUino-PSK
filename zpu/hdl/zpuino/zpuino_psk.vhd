@@ -35,6 +35,8 @@
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
+use ieee.math_real.ALL;
+use ieee.std_logic_misc.ALL;
 use std.textio.all;
 
 library work;
@@ -109,7 +111,8 @@ architecture behave of zpuino_psk is
     reset:           in  std_logic;
     serial_data_in:  in  std_logic;
     q:               out unsigned(DDS_ROM_ADDRESS_WIDTH-1 downto 0);
-    inversion:       out std_logic
+    inversion:       out std_logic;
+    uart_clock:      out std_logic
   );
   end component zpuino_phase_acc;
   
@@ -175,6 +178,11 @@ architecture behave of zpuino_psk is
   
   -- Connecting signals.
   signal psk_dat_o        : std_logic_vector(pskwidth - 1 downto 0);  -- psk output signal
+  
+  -- PSK transmit data
+  signal uart_clock       : std_logic;
+  signal psk_xmit_data    : std_logic_vector(15 downto 0);
+  signal psk_xmit_reg     : std_logic_vector(15 downto 0);
 
   --
   -- Declarations used to define the array of ROM data.
@@ -238,11 +246,12 @@ begin
   --
   psk_phase_acc: zpuino_phase_acc
   port map (
-    clk => wb_clk_i,                -- wishbone clock signal
-    reset => wb_rst_i,              -- wishbone reset signal
+    clk => wb_clk_i,                    -- wishbone clock signal
+    reset => wb_rst_i,                  -- wishbone reset signal
     serial_data_in => psk_serial_data_in,
-    q => psk_phase_acc_count,       -- phase acc output
-    inversion => psk_phase_inversion
+    q => psk_phase_acc_count,           -- phase acc output
+    inversion => psk_phase_inversion,   -- phase inversion output
+    uart_clock => uart_clock            -- uart clock from the phase acc
   );
   --
   -- END PSK PHASE ACCUMULATOR
@@ -331,7 +340,6 @@ begin
       --
       -- Reset signal is set.
       --
-      psk_serial_data_in <= '0';
       phase_in  <= (others => '0');
       dds_acc_inc_hi_i <= (others => '0');
       dds_acc_inc_lo_i <= (others => '0');
@@ -346,7 +354,7 @@ begin
             -- 
             -- Store the incoming phase value to the phase shifter.
             --
-            psk_serial_data_in <= wb_dat_i(0);
+            psk_xmit_data <= wb_dat_i(15 downto 0);
           when "001" =>
             --
             -- Update the DDS increment value.
@@ -367,6 +375,28 @@ begin
       phase_in(0) <= 
           psk_phase_inversion;
           
+    end if;
+  end process;
+  
+  --
+  -- Serial data taken from lowest bit of the psk transmit data
+  -- Then rotate the transmit data 1 bit to the right.
+  --
+  process(wb_clk_i, wb_rst_i)
+  begin
+    if (wb_rst_i = '1') then
+      psk_xmit_reg <= (others => '0');
+      psk_serial_data_in <= '0';
+    elsif rising_edge(wb_clk_i) then
+      if (uart_clock = '1') then
+        if (and_reduce(psk_xmit_reg) = '1') then
+          psk_serial_data_in <= psk_xmit_data(0);
+          psk_xmit_reg <= "1" & psk_xmit_data(15 downto 1);
+        else
+          psk_serial_data_in <= psk_xmit_reg(0);
+          psk_xmit_reg <= "1" & psk_xmit_reg(15 downto 1);
+        end if;
+      end if;
     end if;
   end process;
   

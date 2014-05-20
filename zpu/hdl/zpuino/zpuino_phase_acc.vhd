@@ -13,17 +13,20 @@ use ieee.math_real.all;
 --
 entity zpuino_phase_acc is
   generic (
-    N_HI: integer := 8;       -- number of hi acc bits
-    N_LO: integer := 24;      -- number of lo acc bits
-    M_HI: integer := 256;     -- hi acc modulus 
-    M_LO: integer := 12000    -- lo acc modulus 
+    N_HI:   integer := 8;       -- number of hi acc bits
+    N_LO:   integer := 24;      -- number of lo acc bits
+    M_HI:   integer := 256;     -- hi acc modulus 
+    M_LO:   integer := 12000;   -- lo acc modulus 
+    PSK_0:  std_logic := '0';
+    PSK_1:  std_logic := '1'
   );              
   port (
     clk:             in  std_logic;
     reset:           in  std_logic;
     serial_data_in:  in  std_logic;
     q:               out unsigned(N_HI-1 downto 0);
-    inversion:       out std_logic
+    inversion:       out std_logic;
+    uart_clock:      out std_logic
   );
 end zpuino_phase_acc;
 
@@ -107,9 +110,12 @@ begin
       data_out_enable <= '0';
       r_inversion <= '0';
     elsif rising_edge(clk) then
-      -- Serial data in sample flag
+      --
+      -- Serial data sample flag.  This flag is set so the serial
+      -- data is sampled on the leading edge of the PSK bit period.
+      --
       if ((r_reg_lo_next = 0) and (r_reg_hi_next = 0)) then
-        if (serial_data_in = '1') then
+        if (serial_data_in = PSK_0) then
           if (r_inversion = '0') then
             r_inversion <= '1';
           else
@@ -124,7 +130,8 @@ begin
   --
   -- Set the output data.
   --
-  r_reg_out <= r_reg_hi when (data_out_enable = '1') else (others => '0');
+  r_reg_out <= r_reg_hi when (data_out_enable = PSK_0) else (others => '0');
+  uart_clock <= '1' when ((r_reg_lo = 0) and (r_reg_hi = 0)) else '0';
   
 end arch;
       
