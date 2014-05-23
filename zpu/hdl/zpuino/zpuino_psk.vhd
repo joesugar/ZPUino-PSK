@@ -185,7 +185,8 @@ architecture behave of zpuino_psk is
   signal psk_xmit_data_flag : std_logic;
   signal psk_xmit_reg       : std_logic_vector(15 downto 0);
   signal psk_xmit_reg_flag  : std_logic;
-
+  signal psk_xmit_reg_empty : std_logic;
+  signal psk_output_enable  : std_logic;
   --
   -- Declarations used to define the array of ROM data.
   --
@@ -346,6 +347,7 @@ begin
       dds_acc_inc_hi_i <= (others => '0');
       dds_acc_inc_lo_i <= (others => '0');
       psk_xmit_data_flag <= '0';
+      psk_output_enable <= '0';
       
     elsif (rising_edge(wb_clk_i)) then
       --
@@ -355,11 +357,14 @@ begin
         case wb_adr_i(4 downto 2) is
           when "000" =>
             -- 
-            -- Store the incoming phase value to the phase shifter.
+            -- Store the value to be transmitted.
+            -- Only store the value if the flags are the same, indicating
+            -- the xmit data has been read.
             --
-            if (psk_xmit_reg_flag = psk_xmit_data_flag) then
+            if (psk_xmit_data_flag = psk_xmit_reg_flag) then
               psk_xmit_data <= wb_dat_i(15 downto 0);
               psk_xmit_data_flag <= not(psk_xmit_data_flag);
+              psk_output_enable <= wb_dat_i(16);
             end if;
           when "001" =>
             --
@@ -405,13 +410,13 @@ begin
         -- 
         -- It's time to swap in a new bit.
         --
-        if (and_reduce(psk_xmit_reg) = '1') then
+        if (psk_xmit_reg_empty = '1') then
           --
           -- Done transmitting the old value.
           --
           if (psk_xmit_data_flag = psk_xmit_reg_flag) then
             --
-            -- New value isn't ready so just sent 0.
+            -- New value isn't ready so just send 0.
             --
             psk_serial_data_in <= '0';
             psk_xmit_reg <= (others => '1');
@@ -420,38 +425,55 @@ begin
             --
             -- New value is ready.  Read it in and send the first bit.
             --
-            psk_serial_data_in <= psk_xmit_data(0);
-            psk_xmit_reg <= "1" & psk_xmit_data(15 downto 1);
+            psk_serial_data_in <= psk_xmit_data(15);
+            psk_xmit_reg <= psk_xmit_data(14 downto 0) & '1';
             psk_xmit_reg_flag <= not(psk_xmit_reg_flag);
           end if;
         else
           --
           -- Still transmitting the current value so rotate the new bit in.
           -- 
-          psk_serial_data_in <= psk_xmit_reg(0);
-          psk_xmit_reg <= "1" & psk_xmit_reg(15 downto 1);
+          psk_serial_data_in <= psk_xmit_reg(15);
+          psk_xmit_reg <= psk_xmit_reg(14 downto 0) & '1';
           psk_xmit_reg_flag <= psk_xmit_reg_flag;
         end if;
       end if;
     end if;
   end process;
+  psk_xmit_reg_empty <= and_reduce(psk_xmit_reg);
   
   --
-  -- Put the output on the address out lines.
+  -- Load the output data when address is read.
   --
-  process(wb_adr_i, i_data_out, q_data_out)
+  process(wb_adr_i, psk_output_enable)
   begin
-    wb_dat_o <= (others => '0');
-    wb_dat_o(NUMBER_OF_SHIFTS+2*IQ_BUS_WIDTH downto 2*IQ_BUS_WIDTH) <= 
-        phase_out;
-    wb_dat_o(2*IQ_BUS_WIDTH-1 downto IQ_BUS_WIDTH) <= 
-        std_logic_vector(i_data_out);
-    wb_dat_o(IQ_BUS_WIDTH-1 downto  0) <= 
-        std_logic_vector(q_data_out);
-        
-    i_audio_out <= std_logic_vector(i_data_out + "10000000");
-    q_audio_out <= std_logic_vector(q_data_out + "10000000");
+    case wb_adr_i(4 downto 2) is
+      when "000" =>
+        -- 
+        -- Store the value to be returned.
+        --
+        wb_dat_o(31 downto 0) <= (others => '0');
+        wb_dat_o(1) <= psk_output_enable;
+        wb_dat_o(0) <= psk_xmit_data_flag xnor psk_xmit_reg_flag;
+      when others =>
+        wb_dat_o(31 downto 0) <= (others => '0');
+    end case;
   end process;
+  
+  --
+  -- Load the audio output data.
+  --
+  process(i_data_out, q_data_out, psk_output_enable)
+  begin
+    if (psk_output_enable = '1') then
+      i_audio_out <= std_logic_vector(i_data_out + "10000000");
+      q_audio_out <= std_logic_vector(q_data_out + "10000000");
+    else
+      i_audio_out <= "10000000";
+      q_audio_out <= "10000000";
+    end if;
+  end process;  
+  
   --
   -- END ARCHITECTURE CODE
   --
