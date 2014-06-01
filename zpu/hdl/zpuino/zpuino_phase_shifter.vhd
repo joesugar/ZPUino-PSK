@@ -188,8 +188,8 @@ begin
         
         if or_reduce(shift_stream(i-1).phase and shift_stream(i).shift_mask) = '0' then
           --
-          -- Mask is clear so angle to be shifted at this point is negative. 
-          -- You're going to add the angle.  d = -1.
+          -- Mask is clear so angle to be rotated at this point is negative. 
+          -- d = -1.
           --
           shift_stream(i).i_data <= 
               shift_stream(i-1).i_data + shift_right_q;
@@ -199,8 +199,8 @@ begin
               shift_stream(i-1).phase;
         else
           --
-          -- Mask is set so angle is to be shifted at this point is positive.  
-          -- You're going to subtract the angle.  d = 1.
+          -- Mask is set so angle is to be rotated at this point is positive.  
+          -- d = 1.
           --
           shift_stream(i).i_data <= 
               shift_stream(i-1).i_data - shift_right_q; 

@@ -31,7 +31,6 @@
 --  ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
 --  ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 --  
---
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
@@ -49,13 +48,19 @@ entity zpuino_psk is
     pskwidth: integer := 8;
     
     -- Constants associated with the phase shifter.
-    NUMBER_OF_SHIFTS : integer := 7;
     IQ_BUS_WIDTH : integer := 8;
-    PSK_ROM_ADDRESS_WIDTH : integer := 8;
-    PSK_DATA_WIDTH : integer := 8;          -- NUMBER_OF_SHIFTS+1
+    
+    NUMBER_OF_SHIFTS : integer := 7;
+    PSK_ROM_ADDRESS_WIDTH : integer := 8;   -- Used to map phase to phase shifts
+    PSK_ROM_DATA_WIDTH : integer := 8;      -- NUMBER_OF_SHIFTS+1
+    
     DDS_ROM_DATA_WIDTH : integer := 8;
     DDS_ROM_ADDRESS_WIDTH : integer := 8;
-    DDS_INC_HI_WIDTH : integer := 8
+    DDS_INC_HI_WIDTH : integer := 8;
+    
+    NUMBER_OF_CHANNELS : integer := 2;
+    I_CHANNEL : integer := 1;
+    Q_CHANNEL : integer := 0
   );
   port (
     -- Wishbone signals.
@@ -72,7 +77,7 @@ entity zpuino_psk is
     wb_inta_o:out std_logic;
 
     -- Other required signals.
-    tx: out std_logic_vector(1 downto 0);
+    tx: out std_logic_vector(NUMBER_OF_CHANNELS-1 downto 0);
     debug : out std_logic_vector(7 downto 0)
   );
 end entity zpuino_psk;
@@ -110,7 +115,7 @@ architecture behave of zpuino_psk is
     clk:             in  std_logic;
     reset:           in  std_logic;
     serial_data_in:  in  std_logic;
-    q:               out unsigned(DDS_ROM_ADDRESS_WIDTH-1 downto 0);
+    q:               out unsigned(PSK_ROM_ADDRESS_WIDTH-1 downto 0);
     inversion:       out std_logic;
     uart_clock:      out std_logic
   );
@@ -125,10 +130,10 @@ architecture behave of zpuino_psk is
     reset:           in  std_logic;
     i_data_in:       in  signed(DDS_ROM_DATA_WIDTH-1 downto 0);
     q_data_in:       in  signed(DDS_ROM_DATA_WIDTH-1 downto 0);
-    phase_in:        in  std_logic_vector(NUMBER_OF_SHIFTS downto 0);
+    phase_in:        in  std_logic_vector(PSK_ROM_DATA_WIDTH-1 downto 0);
     i_data_out:      out signed(DDS_ROM_DATA_WIDTH-1 downto 0);
     q_data_out:      out signed(DDS_ROM_DATA_WIDTH-1 downto 0);
-    phase_out:       out std_logic_vector(NUMBER_OF_SHIFTS downto 0)
+    phase_out:       out std_logic_vector(PSK_ROM_DATA_WIDTH-1 downto 0)
   );
   end component zpuino_phase_shifter;
 
@@ -154,20 +159,20 @@ architecture behave of zpuino_psk is
 
   -- Signals associated with the DDS rom.
   signal dds_rom_addr_i   : std_logic_vector(DDS_ROM_ADDRESS_WIDTH-1 downto 0); -- psk rom address
-  signal dds_rom_o        : signed(DDS_ROM_DATA_WIDTH-1 downto 0);    -- rom output
+  signal dds_rom_o        : signed(DDS_ROM_DATA_WIDTH-1 downto 0);              -- rom output
 
   -- Signals associated with the phase accumulator.
-  signal psk_phase_acc_count  : unsigned(7 downto 0);         -- phase accumulator output.
+  signal psk_phase_acc_count  : unsigned(PSK_ROM_ADDRESS_WIDTH-1 downto 0);     -- phase accumulator output.
   signal psk_phase_inversion  : std_logic;
   signal psk_serial_data_in   : std_logic;
   
   -- Signals associated with the phase shifter.
   signal i_data_in        : signed(IQ_BUS_WIDTH-1 downto 0);
   signal q_data_in        : signed(IQ_BUS_WIDTH-1 downto 0);
-  signal phase_in         : std_logic_vector(NUMBER_OF_SHIFTS downto 0);
+  signal phase_in         : std_logic_vector(PSK_ROM_DATA_WIDTH-1 downto 0);
   signal i_data_out       : signed(IQ_BUS_WIDTH-1 downto 0);
   signal q_data_out       : signed(IQ_BUS_WIDTH-1 downto 0);
-  signal phase_out        : std_logic_vector(NUMBER_OF_SHIFTS downto 0);
+  signal phase_out        : std_logic_vector(PSK_ROM_DATA_WIDTH-1 downto 0);
   
   -- Signals associated with the audio out
   signal i_audio_out      : std_logic_vector(IQ_BUS_WIDTH-1 downto 0);
@@ -191,12 +196,12 @@ architecture behave of zpuino_psk is
   -- Declarations used to define the array of ROM data.
   --
   type rom_array is array(2**PSK_ROM_ADDRESS_WIDTH-1 downto 0) 
-      of std_logic_vector(NUMBER_OF_SHIFTS downto 0);
+      of std_logic_vector(PSK_ROM_DATA_WIDTH-1 downto 0);
       
   impure function rom_init(filename : string) return rom_array is
     file rom_file : text open read_mode is filename;
     variable rom_line : line;
-    variable rom_value : bit_vector(NUMBER_OF_SHIFTS downto 0);
+    variable rom_value : bit_vector(PSK_ROM_DATA_WIDTH-1 downto 0);
     variable temp : rom_array;
   begin
     for rom_index in 0 to 2**PSK_ROM_ADDRESS_WIDTH-1 loop
@@ -224,10 +229,10 @@ begin
   port map (
     clk     => wb_clk_i,            -- wishbone clock signal
     reset   => wb_rst_i,            -- wishbone reset signal
-    inc_hi  => dds_acc_inc_hi_i,        -- 7 downto 0
-    inc_lo  => dds_acc_inc_lo_i,        -- 23 downto 0
+    inc_hi  => dds_acc_inc_hi_i,    -- 7 downto 0
+    inc_lo  => dds_acc_inc_lo_i,    -- 23 downto 0
     carry   => open,
-    q       => dds_acc_reg_o            -- 7 downto 0
+    q       => dds_acc_reg_o        -- 7 downto 0
   );
   
   --
@@ -249,12 +254,12 @@ begin
   --
   psk_phase_acc: zpuino_phase_acc
   port map (
-    clk => wb_clk_i,                    -- wishbone clock signal
-    reset => wb_rst_i,                  -- wishbone reset signal
-    serial_data_in => psk_serial_data_in,
-    q => psk_phase_acc_count,           -- phase acc output
-    inversion => psk_phase_inversion,   -- phase inversion output
-    uart_clock => uart_clock            -- uart clock from the phase acc
+    clk => wb_clk_i,                      -- wishbone clock signal
+    reset => wb_rst_i,                    -- wishbone reset signal
+    serial_data_in => psk_serial_data_in, -- serial data in
+    q => psk_phase_acc_count,             -- phase acc output
+    inversion => psk_phase_inversion,     -- phase inversion output
+    uart_clock => uart_clock              -- uart clock from the phase acc
   );
   --
   -- END PSK PHASE ACCUMULATOR
@@ -293,7 +298,7 @@ begin
     clk       => wb_clk_i,
     rst       => wb_rst_i,
     data_in   => std_logic_vector(i_audio_out),
-    data_out  => tx(1)
+    data_out  => tx(I_CHANNEL)
   );
 
   psk_d2a_q: simple_sigmadelta
@@ -304,7 +309,7 @@ begin
     clk       => wb_clk_i,
     rst       => wb_rst_i,
     data_in   => std_logic_vector(q_audio_out),
-    data_out  => tx(0)
+    data_out  => tx(Q_CHANNEL)
   );
   --
   -- END D2A CONVERTERS
@@ -364,7 +369,6 @@ begin
             if (psk_xmit_data_flag = psk_xmit_reg_flag) then
               psk_xmit_data <= wb_dat_i(15 downto 0);
               psk_xmit_data_flag <= not(psk_xmit_data_flag);
-              psk_output_enable <= wb_dat_i(16);
             end if;
           when "001" =>
             --
@@ -374,6 +378,11 @@ begin
                 std_logic_vector(wb_dat_i(31 downto 31-DDS_INC_HI_WIDTH+1));
             dds_acc_inc_lo_i <= 
                 std_logic_vector(wb_dat_i(31-DDS_INC_HI_WIDTH downto 0));
+          when "010" =>
+            --
+            -- Status register.
+            --
+            psk_output_enable <= wb_dat_i(0);
           when others =>
         end case;
       end if;
@@ -448,13 +457,13 @@ begin
   process(wb_adr_i, psk_output_enable)
   begin
     case wb_adr_i(4 downto 2) is
-      when "000" =>
+      when "010" =>
         -- 
         -- Store the value to be returned.
         --
         wb_dat_o(31 downto 0) <= (others => '0');
-        wb_dat_o(1) <= psk_output_enable;
-        wb_dat_o(0) <= psk_xmit_data_flag xnor psk_xmit_reg_flag;
+        wb_dat_o(1) <= psk_xmit_data_flag xnor psk_xmit_reg_flag;
+        wb_dat_o(0) <= psk_output_enable;
       when others =>
         wb_dat_o(31 downto 0) <= (others => '0');
     end case;
